@@ -23,12 +23,7 @@
       "last_seen": "هم اکنون (Just now)",
       "total_ports": 48,
       "has_unsaved_changes": false,
-      "last_modified_time": "09:54:55",
-      "ssh_port": 22,
-      "ssh_username": "admin",
-      "ssh_password": "cisco123",
-      "enable_password": "cisco_enable",
-      "ssh_status": "authenticated"
+      "last_modified_time": "09:54:55"
     },
     {
       "id": "dev-router-gw",
@@ -51,12 +46,7 @@
       "snmp_community": "public",
       "firmware": "Cisco IOS-XE 17.06.04",
       "last_seen": "هم اکنون (Just now)",
-      "total_ports": 8,
-      "ssh_port": 22,
-      "ssh_username": "admin",
-      "ssh_password": "cisco123",
-      "enable_password": "cisco_enable",
-      "ssh_status": "authenticated"
+      "total_ports": 8
     },
     {
       "id": "dev-dist-bldg-a",
@@ -79,12 +69,7 @@
       "snmp_community": "public",
       "firmware": "Cisco IOS-XE 17.09.02",
       "last_seen": "هم اکنون (Just now)",
-      "total_ports": 48,
-      "ssh_port": 22,
-      "ssh_username": "admin",
-      "ssh_password": "cisco123",
-      "enable_password": "cisco_enable",
-      "ssh_status": "authenticated"
+      "total_ports": 48
     },
     {
       "id": "dev-acc-bldg-a-f3",
@@ -107,12 +92,7 @@
       "snmp_community": "public",
       "firmware": "Cisco IOS 15.2(7)E2",
       "last_seen": "هم اکنون (Just now)",
-      "total_ports": 48,
-      "ssh_port": 22,
-      "ssh_username": "admin",
-      "ssh_password": "cisco123",
-      "enable_password": "cisco_enable",
-      "ssh_status": "authenticated"
+      "total_ports": 48
     },
     {
       "id": "dev-dist-bldg-b",
@@ -135,12 +115,7 @@
       "snmp_community": "public",
       "firmware": "Cisco IOS-XE 17.09.01",
       "last_seen": "هم اکنون (Just now)",
-      "total_ports": 24,
-      "ssh_port": 22,
-      "ssh_username": "admin",
-      "ssh_password": "cisco123",
-      "enable_password": "cisco_enable",
-      "ssh_status": "authenticated"
+      "total_ports": 24
     },
     {
       "id": "dev-acc-bldg-b-f2",
@@ -163,12 +138,7 @@
       "snmp_community": "public",
       "firmware": "Cisco IOS-XE 17.06.03",
       "last_seen": "۲ ساعت پیش (2 hours ago)",
-      "total_ports": 28,
-      "ssh_port": 22,
-      "ssh_username": "admin",
-      "ssh_password": "cisco123",
-      "enable_password": "cisco_enable",
-      "ssh_status": "authenticated"
+      "total_ports": 28
     },
     {
       "id": "dev-ap-bldg-a-f1",
@@ -193,12 +163,7 @@
       "last_seen": "هم اکنون (اعمال شده با تمپلیت)",
       "total_ports": 2,
       "has_unsaved_changes": false,
-      "last_modified_time": "10:38:37",
-      "ssh_port": 22,
-      "ssh_username": "admin",
-      "ssh_password": "cisco123",
-      "enable_password": "cisco_enable",
-      "ssh_status": "authenticated"
+      "last_modified_time": "10:38:37"
     },
     {
       "id": "dev-ap-bldg-a-f3",
@@ -221,12 +186,7 @@
       "snmp_community": "public",
       "firmware": "Capwap 8.10.185.0",
       "last_seen": "هم اکنون (Just now)",
-      "total_ports": 2,
-      "ssh_port": 22,
-      "ssh_username": "admin",
-      "ssh_password": "cisco123",
-      "enable_password": "cisco_enable",
-      "ssh_status": "authenticated"
+      "total_ports": 2
     },
     {
       "id": "dev-ap-bldg-b-f1",
@@ -249,12 +209,7 @@
       "snmp_community": "public",
       "firmware": "Capwap 8.10.151.0",
       "last_seen": "هم اکنون (Just now)",
-      "total_ports": 2,
-      "ssh_port": 22,
-      "ssh_username": "admin",
-      "ssh_password": "cisco123",
-      "enable_password": "cisco_enable",
-      "ssh_status": "authenticated"
+      "total_ports": 2
     }
   ],
   "ports": {

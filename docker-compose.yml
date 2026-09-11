@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  nettopology:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nettopology_panel
+    restart: unless-stopped
+    # Using host network allows direct TCP SSH port 22 access to switches and local subnets
+    network_mode: "host"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+      - PYTHON_PORT=5001
+    volumes:
+      - ./backend/network_data.json:/app/backend/network_data.json
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/api/status/bridge"]
+      interval: 15s
+      timeout: 5s
+      retries: 3

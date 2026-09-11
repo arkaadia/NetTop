@@ -31,6 +31,47 @@ export interface Device {
   ssh_status?: 'connected' | 'authenticated' | 'disconnected' | 'failed';
 }
 
+export interface DeviceConnectionTestResult {
+  ip: string;
+  is_online: boolean;
+  icmp_ping: boolean;
+  latency_ms: number | null;
+  ports: {
+    ssh_22: boolean;
+    telnet_23: boolean;
+    http_80: boolean;
+    https_443: boolean;
+  };
+  banner?: string;
+  diagnostics: string[];
+  device?: Device;
+}
+
+export interface RealSshTestRequest {
+  host: string;
+  port?: number;
+  username: string;
+  password?: string;
+  enablePassword?: string;
+  timeoutMs?: number;
+}
+
+export interface RealSshTestResult {
+  success: boolean;
+  message: string;
+  latency_ms?: number;
+  banner?: string;
+  authenticated?: boolean;
+  details?: {
+    host: string;
+    port: number;
+    username: string;
+    authMethod: string;
+    cipher?: string;
+    keyExchange?: string;
+  };
+}
+
 export interface SwitchPort {
   port_id: string;
   name: string;

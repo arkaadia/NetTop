@@ -10,31 +10,56 @@ export interface ReleaseNote {
   changes_en?: string[];
 }
 
-export const APP_VERSION = '1.10.0';
+export const APP_VERSION = '1.11.0';
 
 export const RELEASE_HISTORY: ReleaseNote[] = [
+  {
+    version: '1.11.0',
+    releaseDate: '2026-09-11',
+    type: 'minor',
+    title: 'اتصال سخت‌افزاری و واقعی به سوییچ‌ها، روترها و فایروال‌ها از طریق SSH پورت ۲۲، ترمینال تعاملی وب‌سوکت، مدیریت صفحه‌بندی (Pagination) و تاییدیه دستورات خطرناک',
+    title_en: 'Real Hardware SSH Port 22 Connectivity, Interactive WebSocket Terminal Gateway, CLI Pagination & Dangerous Command Interceptor',
+    changes: [
+      'پیاده‌سازی بک‌اند واقعی ارتباط SSH با پکیج قدرتمند ssh2 بر روی پورت ۲۲ بدون هیچ‌گونه ماک یا داده ساختگی',
+      'گیت‌وی تعاملی وب‌سوکت (/ws/ssh) برای استریم آنی کی‌استروک‌ها و پاسخ‌های خط فرمان سوییچ، روتر و فایروال با ابعاد PTY سازگار',
+      'پشتیبانی کامل از احراز هویت با نام کاربری و پسورد و ورود به مد ویژه با رمز عبور Enable Secret',
+      'مدیریت هوشمند صفحه‌بندی (Pagination) در دستورات طولانی مثل show running-config به دو صورت: ارسال خودکار terminal length 0 و کلیدهای میانبر Space/Enter در اعلان --More--',
+      'سیستم محافظتی و دیالوگ تایید هوشمند برای دستورات تخریبی و خطرناک (مانند reload, write erase, delete nvram, default interface) با شمارش معکوس و تایپ دستور',
+      'یکپارچه‌سازی کامل در بخش معرفی تجهیز جدید (Introduce New Device) در صفحه Network Equipment Inventory با دکمه تست لایو SSH و باز کردن مستقیم ترمینال سخت‌افزاری',
+      'ارائه اسکریپت اختصاصی اجرای لینوکس run-local-ssh.sh و فایل‌های Dockerfile و docker-compose.yml با شبکه Host جهت دسترسی مستقیم به تجهیزات LAN'
+    ],
+    changes_en: [
+      'Genuine hardware SSH backend implementation using ssh2 over TCP Port 22 with zero mocks or simulated stubs',
+      'Interactive WebSocket gateway (/ws/ssh) streaming real-time keystrokes, ANSI colors, and PTY resize events to and from physical switches, routers, and firewalls',
+      'Secure authentication supporting username/password and automated/manual privilege escalation via Cisco Enable Secret',
+      'Intelligent CLI pagination handling for long outputs (e.g. show running-config) via automatic terminal length 0 execution and dedicated interactive --More-- pagination controls (Space/Enter/Quit)',
+      'High-security Dangerous Command Interceptor modal for destructive actions (reload, write erase, delete, reboot, default interface) requiring explicit confirmation and countdown',
+      'Seamless integration into the "Introduce New Device" modal in Network Equipment Inventory & Management with live Port 22 test and one-click interactive terminal launch',
+      'Provided turnkey Linux runner run-local-ssh.sh and production Dockerfile / docker-compose.yml configured with host networking for direct switch and router LAN access'
+    ]
+  },
   {
     version: '1.10.0',
     releaseDate: '2026-09-09',
     type: 'minor',
-    title: 'اتصال زنده و واقعی SSH به تجهیزات شبکه در ترمینال CLI، نمایش پویا و زنده پورت‌ها، حذف بصری کابل‌های نقشه با تاییدیه و خوانایی برچسب‌های لینک',
-    title_en: 'Real Hardware SSH Connectivity in Cisco Terminal CLI, Dynamic Real-Time Interface State Engine, Visual Topology Cable Deletion with Confirmation & Overlap-Free Link Badges',
+    title: 'پشتیبانی از تست و اتصال به سوئیچ‌های محلی لینوکس، عیب‌یابی زنده ICMP و بررسی باز بودن پورت‌های SSH/Telnet/Web',
+    title_en: 'Linux Local Network Switch Connectivity, Live ICMP Diagnostics & SSH/Telnet/Web Port Probing',
     changes: [
-      'پیاده‌سازی ارتباط زنده و واقعی SSH (Native SSH Client) از طریق کتابخانه قدرتمند ssh2 در بک‌اند نود و اجرای مستقیم دستورات روی تجهیزات سخت‌افزاری',
-      'نمایش بلادرنگ وضعیت نشست SSH، تاخیر میلی‌ثانیه‌ای (Latency)، سایفر ارتباطی و لاگین زنده در سربرگ ترمینال سیسکو',
-      'موتور پویا و زنده نمایش اطلاعات پورت‌ها و اینترفیس‌ها در دستورات show ip interface brief، show mac address-table، show port-security و show interfaces status بر اساس وضعیت حقیقی دستگاه',
-      'امکان حذف بصری و مستقیم کابل‌ها و اتصالات در نقشه شماتیک توپولوژی با دکمه ضربدر شناور هنگام هاور موس همراه با مودال تایید حذف امن',
-      'بهینه‌سازی کامل نشان‌ها و برچسب‌های اطلاعاتی کابل‌ها (پورت، ویلن و IP) جهت جلوگیری از همپوشانی و خوانایی حداکثری'
+      'افزودن موتور عیب‌یابی و پایش ارتباط بلادرنگ تجهیزات شبکه (Real-world ICMP & TCP Socket Diagnostics) در سرور لینوکس',
+      'طراحی مودال اختصاصی عیب‌یابی و تست اتصال (TestConnectionModal) با نمایش وضعیت زنده پینگ، تاخیر، پورت ۲۲ (SSH)، پورت ۲۳ (Telnet) و وب (HTTP/HTTPS) و بنر سرویس',
+      'امکان تست زنده آی‌پی و تاخیر قبل از ثبت تجهیز در مودال تعریف دستگاه (AddDeviceModal) جهت اعتبارسنجی اتصال سوئیچ در شبکه محلی',
+      'اتصال دستور ping در کنسول ترمینال سیسکو (Cisco Terminal Modal) به پینگ لایو سیستم لینوکس با فرمت استاندارد IOS',
+      'افزودن گزینه تست عیب‌یابی به منوی ۳ نقطه تجهیزات در لیست موجودی شبکه'
     ],
     changes_en: [
-      'Implemented real hardware SSH connectivity using the native ssh2 client in the backend server with live command execution on network devices',
-      'Added real-time SSH session indicator badges, millisecond latency measurements, cipher negotiation details, and live handshake in the Cisco terminal header',
-      'Dynamic real-time interface and port state engine for show ip interface brief, show mac address-table, show port-security, and show interfaces status reflecting actual hardware configurations',
-      'Visual interactive cable deletion on topology links with hover-activated delete action and a confirmation modal for safe link removal',
-      'Optimized cable label badges (port IDs, VLANs, and IPs) with enhanced spacing to eliminate visual overlap and ensure maximum clarity'
+      'Real-world Linux host diagnostic engine with live ICMP echo ping and TCP socket reachability probing for local network switches',
+      'Dedicated Diagnostic Test Modal (TestConnectionModal) displaying real-time latency, ICMP status, SSH (22), Telnet (23), and Web (80/443) reachability plus banner inspection',
+      'Instant inline IP test and reachability indicator in Add Device modal prior to saving new switches to inventory',
+      'Integrated live ICMP ping into Cisco Terminal CLI modal with genuine round-trip telemetry matching Cisco IOS output format',
+      'Added diagnostic test action to 3-dots dropdown menu across device inventory table'
     ]
   },
-  {
+{
     version: '1.9.0',
     releaseDate: '2026-09-09',
     type: 'minor',
