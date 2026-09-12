@@ -1,11 +1,11 @@
 # NetTopology 🌐
 
-[![Version](https://img.shields.io/badge/version-1.11.0-blue.svg)](https://github.com/shahbazimasoud/NetTopology)
+[![Version](https://img.shields.io/badge/version-1.13.0-blue.svg)](https://github.com/shahbazimasoud/NetTopology)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/shahbazimasoud/NetTopology)
 [![Node](https://img.shields.io/badge/node-20%2B%20%7C%2022%20LTS-brightgreen.svg)](https://nodejs.org)
 
-سامانه جامع مدیریت، مانیتورینگ توپولوژی شبکه و مدیریت تجهیزات سیسکو (سویچ، روتر و فایروال) - نسخه ۱.۱۱.۰
-A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Configuration Platform - Version 1.11.0
+سامانه جامع مدیریت، مانیتورینگ توپولوژی شبکه و مدیریت تجهیزات سیسکو (سویچ، روتر و فایروال) - نسخه ۱.۱۳.۰
+A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Configuration Platform - Version 1.13.0
 
 ---
 
@@ -140,6 +140,13 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
 - **تست بلادرنگ IP قبل از ثبت تجهیز (AddDeviceModal):** دکمه اختصاصی «تست اتصال آی‌پی» در فرم ثبت سوئیچ جدید برای اطمینان از در دسترس بودن و باز بودن پورت ۲۲ یا پینگ تجهیز قبل از ثبت در موجودی.
 - **ترمینال سیسکو با پینگ زنده:** اجرای دستور `ping <IP>` در کنسول ترمینال شبیه‌ساز سیسکو به صورت زنده پاکت‌های ICMP واقعی لینوکس را ارسال کرده و نتایج را در قالب استاندارد Cisco IOS نمایش می‌دهد.
 
+### ۱۶. استخراج خودکار پورت‌های واقعی و مشخصات سخت‌افزاری سوئیچ سیسکو با SSH (Real Hardware Port Auto-Discovery & Live Sync)
+- **کشف آنی و واقعی پورت‌ها بدون داده ساختگی:** با اتصال مستقیم SSH پورت ۲۲ به سوئیچ‌های فیزیکی، دستورات `show ip interface brief` و `show interfaces status` اجرا شده و کلیه پورت‌های فیزیکی واقعی (FastEthernet, GigabitEthernet, TenGigabitEthernet)، وضعیت عملیاتی (up/down/disabled)، شماره VLAN و مدهای ارتباطی استخراج و ذخیره می‌شوند.
+- **دکمه اختصاصی استخراج در فرم افزودن تجهیز (Add Device Modal):** با کلیک روی دکمه «استخراج پورت‌های واقعی با SSH» یا فعال کردن تیک «کشف خودکار پورت‌های واقعی»، اطلاعات فیزیکی سخت‌افزار قبل یا حین ثبت سوئیچ استخراج و در پرونده ذخیره می‌شود.
+- **دکمه اختصاصی «همگام‌سازی پورت‌های واقعی (Sync Real Ports)» در هدر بازرس پورت:** امکان به‌روزرسانی لحظه‌ای وضعیت و تعداد پورت‌های شاسی سخت‌افزاری مستقیماً از سوئیچ واقعی با یک کلیک.
+- **استخراج شماره سریال، مدل دقیق و فریم‌ور:** خواندن شماره سریال (Serial Number)، مدل سخت‌افزاری دقیق و آپ‌تایم سوئیچ از طریق دستور `show version` و ذخیره آن در متادیتا و فیس‌پلیت تجهیز.
+- **ارتقای لایه z-index ترمینال سیسکو (z-[70]) و باز شدن خودکار دراور احراز هویت:** در صورت عدم وجود پسورد، دراور مشخصات احراز هویت به صورت خودکار باز می‌شود تا کاربر به سادگی پسورد را وارد کرده و متصل شود.
+
 ---
 
 ## ساختار معماری و تکنولوژی‌ها
@@ -241,6 +248,14 @@ npm start
 > ۳. **گیت و کامیت خودکار**: تمامی تغییرات باید خودکار همراه با پیام توصیفی دوزبانه روی برنچ `master` مخزن گیت‌هاب کامیت و پوش شوند. جزئیات بیشتر در فایل `AGENTS.md` درج شده است.
 
 ### تاریخچه نسخه‌ها و رفع مشکلات (Release Notes & Troubleshooting)
+- **نسخه ۱.۱۲.۰ (v1.12.0 - اتصال مستقیم دکمه Cisco Terminal به SSH سخت‌افزار واقعی، ورود خودکار به سوئیچ، راهنمای جامع دستورات سیسکو و ذخیره مشخصات احراز هویت)**:
+  - **یکپارچه‌سازی مستقیم دکمه Cisco Terminal:** اتصال کلید ترمینال در هدر مودال بازرسی پورت (`PortInspectorModal`) و تمامی بخش‌های برنامه به ترمینال SSH واقعی روی پورت ۲۲ بدون واسطه شبیه‌ساز ماک.
+  - **ورود مستقیم و خودکار به سوئیچ (Instant Auto-Connect):** با کلیک بر روی دکمه، اتصال وب‌سوکت `/ws/ssh` به صورت فوری برقرار شده و کاربر مستقیماً وارد محیط خط فرمان سوییچ مربوطه می‌شود.
+  - **پنل کشویی راهنمای دستورات سیسکو (Cisco IOS Command Guide):** دراور بازشونده با دسته‌بندی فرامین Show، Config، Exec و VLAN، موتور جستجوی آنی و امکان اجرای مستقیم (Run Now) یا درج در خط فرمان (Insert).
+  - **ذخیره دائمی مشخصات احراز هویت (Save Credentials to Device):** امکان ذخیره یوزرنیم، پسورد ورود، پورت SSH و رمز Enable سیسکو روی پرونده تجهیز با یک کلیک.
+  - **سوئیچ سریع به شبیه‌ساز آفلاین (Offline Simulator Fallback):** امکان تغییر لحظه‌ای بین حالت سخت‌افزاری واقعی و شبیه‌ساز آفلاین برای مواقعی که تجهیز فیزیکی در دسترس نیست.
+  - **افزایش لایه z-index به z-[60]:** نمایش استاندارد و باکنتراست ترمینال بر روی پنجره Port Inspector با پس‌زمینه بلور شیشه‌ای.
+
 - **نسخه ۱.۱۱.۰ (v1.11.0 - اتصال سخت‌افزاری و واقعی به سوییچ‌ها و روترها با پورت ۲۲ SSH، ترمینال تعاملی وب‌سوکت، مدیریت صفحه‌بندی Pagination و دیالوگ تایید دستورات خطرناک)**:
   - **پیاده‌سازی بک‌اند واقعی ارتباط SSH با پکیج قدرتمند `ssh2`:** ارتباط مستقیم سوکت TCP با سوییچ، روتر یا فایروال بر روی پورت ۲۲ با الگوریتم‌های استاندارد رمزنگاری و سازگاری کامل با دستگاه‌های مدرن و کلاسیک سیسکو بدون هیچ‌گونه ماک یا شبیه‌سازی ساختگی.
   - **گیت‌وی اختصاصی وب‌سوکت (`/ws/ssh`):** استریم بلادرنگ کی‌استروک‌ها و کاراکترها بین ترمینال فرانت‌اند و PTY لینوکس سوئیچ همراه با مدیریت تغییر سایز پنجره (Terminal Window Resize).
@@ -421,6 +436,13 @@ npm start
 - **Pre-Registration Live IP Verification (AddDeviceModal):** Built-in "Test Connection" trigger in the new device creation form to validate IP reachability and verify port status before committing to the inventory.
 - **Cisco CLI Terminal with Live ICMP:** Terminal `ping <IP>` command executes authentic background ICMP echo requests on the Linux host and renders the output in Cisco IOS format.
 
+### 16. Real Hardware Port Auto-Discovery & Live SSH Sync for Cisco Switches
+- **Accurate Physical Interface Discovery Without Mock Stubs:** Connects over TCP Port 22 via native SSH, executes Cisco IOS commands (`show ip interface brief` and `show interfaces status`), and parses physical ports (GigabitEthernet, FastEthernet, TenGigabit), link statuses, VLAN allocations, and speeds.
+- **Inline Discovery in Add Device Modal:** "Fetch Real Ports (SSH)" button and auto-sync toggle during switch registration to populate accurate hardware ports automatically.
+- **Header "Sync Real Ports" Action in Port Inspector:** On-demand synchronization to pull the latest physical port states, descriptions, and modes directly from the live hardware.
+- **Hardware Serial Number, Exact Model & Firmware Extraction:** Parses `show version` to capture the physical device serial number, model name, and uptime.
+- **Elevated Cisco Terminal Layering (z-[70]) & Auto-Creds Drawer:** Directly launches into the switch terminal with elevated stacking above the port inspector and automatically opens credentials input if password is required.
+
 ---
 
 ## System Architecture & Stack
@@ -519,6 +541,14 @@ Any AI assistant, coding agent, or human contributor working on this repository 
 3. **Git Workflow:** Automatically commit all changes with descriptive commit messages and push to `origin master`.
 
 ### Release Notes & Bug Fixes
+- **Version 1.12.0 (Direct Cisco Terminal Button to Real Hardware SSH, Instant Auto-Connect, Cisco IOS Command Reference & Credential Persistence)**:
+  - **Direct Header Button to Real Hardware SSH:** Seamlessly bound the "Cisco Terminal" header button in `PortInspectorModal` and across the application to the genuine SSH Port 22 terminal engine with zero mock simulator intermediaries.
+  - **Instant Switch Auto-Connect:** Opening the terminal directly initiates the WebSocket gateway (`/ws/ssh`) and drops the engineer straight into the switch's interactive CLI shell.
+  - **Cisco IOS Command Reference Drawer:** Integrated an expandable command reference panel categorizing essential Cisco commands (Show, Config, Exec, VLAN) with instantaneous "Run Now" and "Insert" actions and dynamic search.
+  - **One-Click Credential Persistence:** Added a direct "Save to Device Record" button allowing operators to securely store the SSH username, password, port, and Cisco Enable Secret directly onto the switch model via `updateDevice`.
+  - **Offline Simulation Fallback:** Built an on-the-fly engine toggle to switch seamlessly between Real Hardware SSH and Offline Sandbox CLI whenever the device is temporarily unreachable over the network.
+  - **Elevated Stacking Layer (z-[60]):** Structured the modal layering with elevated z-index and deep backdrop glassmorphism to render cleanly over the port inspector faceplate without conflicts.
+
 - **Version 1.11.0 (Real Hardware SSH Port 22 Connectivity, Interactive WebSocket Terminal Gateway, CLI Pagination & Dangerous Command Interceptor)**:
   - **Genuine Hardware SSH Engine (`ssh2`):** Direct TCP Port 22 SSH client connecting directly to physical switches, routers, and firewalls with full cryptographic cipher compatibility (modern & legacy Cisco IOS/IOS-XE, Mikrotik, Junos) and absolutely zero simulation mocks.
   - **Interactive WebSocket Terminal Gateway (`/ws/ssh`):** Bi-directional, low-latency character and keystroke streaming between browser xterm/ANSI view and the network appliance's pseudo-terminal (PTY) with window resize coordination.

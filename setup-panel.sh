@@ -30,7 +30,7 @@ log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 log_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-PANEL_VERSION="1.11.0"
+PANEL_VERSION="1.13.0"
 REPO_URL="${REPO_URL:-https://github.com/arkaadia/net.git}"
 FALLBACK_REPO_URL="https://github.com/shahbazimasoud/NetTopology.git"
 

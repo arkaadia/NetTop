@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import http from 'http';
+import fs from 'fs';
+import path from 'path';
 import { WebSocketServer, WebSocket } from 'ws';
 import { Client, ConnectConfig } from 'ssh2';
 
@@ -28,6 +30,46 @@ export interface SshTestResult {
   };
 }
 
+export interface ParsedSwitchPort {
+  port_id: string;
+  name: string;
+  status: 'up' | 'down';
+  admin_status: 'enabled' | 'disabled';
+  mode: 'access' | 'trunk';
+  vlan: number;
+  allowed_vlans: string;
+  speed: string;
+  duplex: string;
+  description: string;
+  connected_device?: string;
+  connected_type?: string;
+  poe_status?: string;
+  poe_power?: number;
+}
+
+export interface RealSwitchData {
+  device: {
+    model?: string;
+    firmware?: string;
+    uptime?: string;
+    mac?: string;
+    serial?: string;
+    hostname?: string;
+    total_ports?: number;
+  };
+  ports: ParsedSwitchPort[];
+  rawSummary?: string;
+}
+
+export interface SshDeviceSyncParams {
+  host: string;
+  port?: number;
+  username: string;
+  password?: string;
+  enablePassword?: string;
+  timeoutMs?: number;
+}
+
 // Broad cryptographic compatibility for modern and legacy network equipment (Cisco IOS, Catalyst, ASA, Fortinet, MikroTik, Juniper)
 const COMPATIBLE_ALGORITHMS: ConnectConfig['algorithms'] = {
   kex: [
@@ -52,6 +94,18 @@ const COMPATIBLE_ALGORITHMS: ConnectConfig['algorithms'] = {
     'ssh-rsa', 'ssh-dss', 'ecdsa-sha2-nistp256',
     'ecdsa-sha2-nistp384', 'ecdsa-sha2-nistp521',
     'rsa-sha2-512', 'rsa-sha2-256', 'ssh-ed25519'
+  ],
+  hmac: [
+    'hmac-sha1',
+    'hmac-sha1-96',
+    'hmac-sha2-256',
+    'hmac-sha2-512',
+    'hmac-md5',
+    'hmac-md5-96',
+    'hmac-ripemd160',
+    'hmac-sha1-etm@openssh.com',
+    'hmac-sha2-256-etm@openssh.com',
+    'hmac-sha2-512-etm@openssh.com'
   ]
 };
 
@@ -135,6 +189,10 @@ export function testRealSshConnection(params: SshTestParams): Promise<SshTestRes
       try { conn.end(); } catch {}
     });
 
+    conn.on('keyboard-interactive', (_name, _instructions, _instructionsLang, prompts, finish) => {
+      finish(prompts.map(() => params.password || ''));
+    });
+
     try {
       conn.connect({
         host: params.host,
@@ -142,6 +200,7 @@ export function testRealSshConnection(params: SshTestParams): Promise<SshTestRes
         username: params.username,
         password: params.password,
         readyTimeout: timeout,
+        tryKeyboard: true,
         keepaliveInterval: 2000,
         keepaliveCountMax: 2,
         algorithms: COMPATIBLE_ALGORITHMS
@@ -324,6 +383,10 @@ export function setupSshWebSocketServer(server: http.Server) {
             cleanup();
           });
 
+          sshClient.on('keyboard-interactive', (_name, _instructions, _instructionsLang, prompts, finish) => {
+            finish(prompts.map(() => password || ''));
+          });
+
           try {
             sshClient.connect({
               host,
@@ -331,6 +394,7 @@ export function setupSshWebSocketServer(server: http.Server) {
               username,
               password,
               readyTimeout: 12000,
+              tryKeyboard: true,
               algorithms: COMPATIBLE_ALGORITHMS,
               keepaliveInterval: 5000,
               keepaliveCountMax: 3
@@ -383,3 +447,484 @@ export function setupSshWebSocketServer(server: http.Server) {
 
   return wss;
 }
+
+/**
+ * Standardize port IDs across various Cisco representations
+ * e.g. "GigabitEthernet 1/0/1" -> "Gi1/0/1", "FastEthernet0/1" -> "Fa0/1"
+ */
+export function normalizePortId(raw: string): string {
+  return raw
+    .replace(/\s+/g, '')
+    .replace(/^GigabitEthernet/i, 'Gi')
+    .replace(/^FastEthernet/i, 'Fa')
+    .replace(/^TenGigabitEthernet/i, 'Te')
+    .replace(/^FortyGigabitEthernet/i, 'Fo')
+    .replace(/^HundredGigE/i, 'Hu')
+    .replace(/^Ethernet/i, 'Eth')
+    .replace(/^Port-channel/i, 'Po')
+    .replace(/^Gig/i, 'Gi')
+    .replace(/^Fas/i, 'Fa')
+    .replace(/^Ten/i, 'Te');
+}
+
+/**
+ * Expand short port ID to canonical interface name
+ */
+export function expandPortName(shortId: string): string {
+  if (/^Gi/i.test(shortId)) return shortId.replace(/^Gi/i, 'GigabitEthernet');
+  if (/^Fa/i.test(shortId)) return shortId.replace(/^Fa/i, 'FastEthernet');
+  if (/^Te/i.test(shortId)) return shortId.replace(/^Te/i, 'TenGigabitEthernet');
+  if (/^Fo/i.test(shortId)) return shortId.replace(/^Fo/i, 'FortyGigabitEthernet');
+  if (/^Hu/i.test(shortId)) return shortId.replace(/^Hu/i, 'HundredGigE');
+  if (/^Eth/i.test(shortId)) return shortId.replace(/^Eth/i, 'Ethernet');
+  if (/^Po/i.test(shortId)) return shortId.replace(/^Po/i, 'Port-channel');
+  return shortId;
+}
+
+/**
+ * Parse Cisco IOS CLI command outputs (show version, show interfaces status, show ip int brief, show cdp neighbors)
+ */
+export function parseCiscoOutputs(raw: string): RealSwitchData {
+  const result: RealSwitchData = {
+    device: {},
+    ports: [],
+    rawSummary: raw.slice(0, 500)
+  };
+
+  // 1. Hostname detection from command prompt lines e.g. "Switch#" or "SW-CORE-01>"
+  const promptMatch = raw.match(/^([a-zA-Z0-9\-_]+)[>#]/m);
+  if (promptMatch && promptMatch[1]) {
+    const detectedName = promptMatch[1].trim();
+    if (!/^(enable|terminal|show|exit|configure)$/i.test(detectedName)) {
+      result.device.hostname = detectedName;
+    }
+  }
+
+  // 2. Hardware Model detection
+  const modelPatterns = [
+    /(?:Model number|Model Number)\s*:\s*([^\r\n]+)/i,
+    /cisco\s+([A-Za-z0-9\-]+)\s+\([^\)]+\)\s+processor/i,
+    /Hardware:\s*([A-Za-z0-9\-]+)/i,
+    /Device:\s*([A-Za-z0-9\- ]+)/i
+  ];
+
+  for (const pat of modelPatterns) {
+    const match = raw.match(pat);
+    if (match && match[1]) {
+      let modelStr = match[1].trim();
+      if (!modelStr.toLowerCase().startsWith('cisco') && pat === modelPatterns[1]) {
+        modelStr = `Cisco ${modelStr}`;
+      }
+      result.device.model = modelStr;
+      break;
+    }
+  }
+
+  // 3. Firmware / IOS Software Version
+  const verPatterns = [
+    /Cisco IOS Software[^\r\n]*?Version\s+([0-9a-zA-Z\.\(\):\-]+)/i,
+    /Cisco IOS XE Software, Version\s+([0-9a-zA-Z\.\(\):\-]+)/i,
+    /Version\s+([0-9a-zA-Z\.\(\):\-]+)/i
+  ];
+
+  for (const pat of verPatterns) {
+    const match = raw.match(pat);
+    if (match && match[1]) {
+      result.device.firmware = match[1].trim();
+      break;
+    }
+  }
+
+  // 4. System Uptime
+  const uptimeMatch = raw.match(/[Uu]ptime is\s+([^\r\n]+)/);
+  if (uptimeMatch && uptimeMatch[1]) {
+    result.device.uptime = uptimeMatch[1].trim();
+  }
+
+  // 5. Base Ethernet MAC Address
+  const macMatch = raw.match(/(?:Base [Ee]thernet MAC [Aa]ddress|Base MAC Address|MAC Address)\s*:\s*([0-9a-fA-F:\.\-]+)/i);
+  if (macMatch && macMatch[1]) {
+    let mac = macMatch[1].trim();
+    const cleanHex = mac.replace(/[^0-9a-fA-F]/g, '').toUpperCase();
+    if (cleanHex.length === 12) {
+      mac = (cleanHex.match(/.{1,2}/g) || []).join(':');
+    }
+    result.device.mac = mac;
+  }
+
+  // 6. System Serial Number
+  const serialMatch = raw.match(/(?:System [Ss]erial [Nn]umber|Processor board ID)\s*:\s*([0-9a-zA-Z]+)/i) ||
+                      raw.match(/(?:System [Ss]erial [Nn]umber|Processor board ID)\s+([0-9a-zA-Z]+)/i);
+  if (serialMatch && serialMatch[1]) {
+    result.device.serial = serialMatch[1].trim();
+  }
+
+  // 7. Parse CDP Neighbors mapping: local interface -> connected device
+  const cdpMap: Record<string, string> = {};
+  const cdpLines = raw.split(/\r?\n/);
+  let inCdp = false;
+  for (const line of cdpLines) {
+    if (/show cdp neighbors/i.test(line)) {
+      inCdp = true;
+      continue;
+    }
+    if (inCdp && /Device ID\s+Local Intrfce/i.test(line)) {
+      continue;
+    }
+    if (inCdp && /^[A-Za-z0-9\-_]+[>#]/.test(line)) {
+      inCdp = false;
+      continue;
+    }
+    if (inCdp) {
+      const parts = line.trim().split(/\s+/);
+      if (parts.length >= 3) {
+        const neighborId = parts[0];
+        // Interface can be "Gig 1/0/1" or "Gi1/0/1"
+        if (/^(Gig|Fas|Ten|Eth|Po)/i.test(parts[1])) {
+          const combined = parts[1] + (parts[2]?.startsWith('/') ? parts[2] : (parts[2]?.match(/^\d/) ? ` ${parts[2]}` : ''));
+          const portKey = normalizePortId(combined);
+          cdpMap[portKey] = neighborId;
+        }
+      }
+    }
+  }
+
+  // 8. Parse Ports from 'show interfaces status'
+  const portsList: ParsedSwitchPort[] = [];
+  const statusHeaderIdx = raw.indexOf('Port      Name               Status');
+  if (statusHeaderIdx !== -1) {
+    const afterHeader = raw.substring(statusHeaderIdx);
+    const lines = afterHeader.split(/\r?\n/).slice(1);
+    for (const line of lines) {
+      if (!line.trim() || /^[A-Za-z0-9\-_]+[>#]/.test(line) || /--More--/i.test(line) || /^show\s+/i.test(line)) {
+        if (portsList.length > 0) break;
+        continue;
+      }
+
+      // Regex matching Cisco "show interfaces status" lines
+      // Port Name Status Vlan Duplex Speed Type
+      const match = line.match(/^([A-Za-z0-9\/]+)\s+(.*?)\s+(connected|notconnect|notconnected|disabled|err-disabled|inactive|monitoring)\s+(\S+)\s+(\S+)\s+(\S+)(?:\s+(.*))?$/i);
+      if (match) {
+        const rawPortId = match[1].trim();
+        const portId = normalizePortId(rawPortId);
+        const nameDesc = match[2].trim();
+        const rawStatus = match[3].toLowerCase();
+        const rawVlan = match[4].trim();
+        const rawDuplex = match[5].trim();
+        const rawSpeed = match[6].trim();
+        const portType = (match[7] || '').trim();
+
+        const isConnected = rawStatus === 'connected';
+        const isDisabled = rawStatus === 'disabled' || rawStatus === 'err-disabled';
+        const isTrunk = rawVlan.toLowerCase() === 'trunk';
+        const vlanNum = parseInt(rawVlan, 10) || 1;
+
+        let formattedSpeed = '1 Gbps';
+        if (/1000|1G/i.test(rawSpeed)) formattedSpeed = '1 Gbps';
+        else if (/100/i.test(rawSpeed)) formattedSpeed = '100 Mbps';
+        else if (/10G/i.test(rawSpeed)) formattedSpeed = '10 Gbps';
+        else if (/auto/i.test(rawSpeed)) formattedSpeed = 'Auto';
+
+        let formattedDuplex = 'Full';
+        if (/half/i.test(rawDuplex)) formattedDuplex = 'Half';
+        else if (/auto/i.test(rawDuplex)) formattedDuplex = 'Auto';
+
+        const neighbor = cdpMap[portId] || (isConnected ? (nameDesc || 'Connected Host') : 'Disconnected');
+
+        portsList.push({
+          port_id: portId,
+          name: expandPortName(portId),
+          status: isConnected ? 'up' : 'down',
+          admin_status: isDisabled ? 'disabled' : 'enabled',
+          mode: isTrunk ? 'trunk' : 'access',
+          vlan: isTrunk ? 1 : vlanNum,
+          allowed_vlans: isTrunk ? '1-4094' : String(vlanNum),
+          speed: formattedSpeed,
+          duplex: formattedDuplex,
+          description: nameDesc || (portType ? `${portType}` : `Port ${portId}`),
+          connected_device: neighbor,
+          connected_type: isConnected ? (isTrunk ? 'Switch' : 'Host') : 'None',
+          poe_status: 'off',
+          poe_power: 0
+        });
+      }
+    }
+  }
+
+  // 9. Fallback to 'show ip interface brief' if no ports parsed from status
+  if (portsList.length === 0) {
+    const ipBriefHeaderIdx = raw.indexOf('Interface              IP-Address');
+    if (ipBriefHeaderIdx !== -1) {
+      const lines = raw.substring(ipBriefHeaderIdx).split(/\r?\n/).slice(1);
+      for (const line of lines) {
+        if (!line.trim() || /^[A-Za-z0-9\-_]+[>#]/.test(line) || /^show\s+/i.test(line)) {
+          if (portsList.length > 0) break;
+          continue;
+        }
+        const match = line.match(/^([A-Za-z0-9\/]+)\s+(\S+)\s+\S+\s+\S+\s+(up|down|administratively down)\s+(up|down)/i);
+        if (match) {
+          const rawPort = match[1].trim();
+          // Skip loopback or Null unless they are the only ports
+          if (/^Loopback|^Null/i.test(rawPort)) continue;
+
+          const portId = normalizePortId(rawPort);
+          const rawStatus = match[3].toLowerCase();
+          const rawProto = match[4].toLowerCase();
+          const isUp = rawStatus === 'up' && rawProto === 'up';
+          const isAdminDown = rawStatus.includes('administratively down');
+
+          portsList.push({
+            port_id: portId,
+            name: expandPortName(portId),
+            status: isUp ? 'up' : 'down',
+            admin_status: isAdminDown ? 'disabled' : 'enabled',
+            mode: 'access',
+            vlan: 1,
+            allowed_vlans: '1',
+            speed: '1 Gbps',
+            duplex: 'Full',
+            description: `Interface ${portId}`,
+            connected_device: cdpMap[portId] || (isUp ? 'Active Link' : 'Disconnected'),
+            connected_type: isUp ? 'Host' : 'None',
+            poe_status: 'off',
+            poe_power: 0
+          });
+        }
+      }
+    }
+  }
+
+  result.ports = portsList;
+  result.device.total_ports = portsList.length > 0 ? portsList.length : undefined;
+
+  return result;
+}
+
+/**
+ * Connects to physical switch over SSH, runs discovery commands, and extracts real data and ports
+ */
+export function fetchRealSwitchDataViaSsh(params: SshDeviceSyncParams): Promise<{
+  success: boolean;
+  message: string;
+  data?: RealSwitchData;
+}> {
+  return new Promise((resolve) => {
+    const port = params.port || 22;
+    const timeout = params.timeoutMs || 25000;
+    const conn = new Client();
+    let isSettled = false;
+    let accumulatedOutput = '';
+
+    const timer = setTimeout(() => {
+      if (!isSettled) {
+        isSettled = true;
+        try { conn.end(); } catch {}
+        if (accumulatedOutput.length > 50) {
+          const parsed = parseCiscoOutputs(accumulatedOutput);
+          resolve({
+            success: true,
+            message: `Retrieved data with partial timeout from switch ${params.host}:${port}`,
+            data: parsed
+          });
+        } else {
+          resolve({
+            success: false,
+            message: `Connection timed out after ${timeout / 1000}s on ${params.host}:${port}`
+          });
+        }
+      }
+    }, timeout);
+
+    conn.on('keyboard-interactive', (_name, _instructions, _instructionsLang, prompts, finish) => {
+      finish(prompts.map(() => params.password || ''));
+    });
+
+    conn.on('ready', () => {
+      conn.shell({
+        term: 'vt100',
+        cols: 250,
+        rows: 200
+      }, (shellErr, stream) => {
+        if (shellErr) {
+          if (!isSettled) {
+            isSettled = true;
+            clearTimeout(timer);
+            try { conn.end(); } catch {}
+            resolve({
+              success: false,
+              message: `Failed to open PTY shell on switch: ${shellErr.message}`
+            });
+          }
+          return;
+        }
+
+        stream.on('data', (chunk: Buffer) => {
+          accumulatedOutput += chunk.toString('utf-8');
+        });
+
+        stream.on('close', () => {
+          if (!isSettled) {
+            isSettled = true;
+            clearTimeout(timer);
+            try { conn.end(); } catch {}
+            const parsed = parseCiscoOutputs(accumulatedOutput);
+            resolve({
+              success: true,
+              message: `Successfully retrieved real switch info and ${parsed.ports.length} physical ports from ${params.host}:${port}`,
+              data: parsed
+            });
+          }
+        });
+
+        // Sequence commands: disable paging, elevate if password provided, run discovery commands
+        setTimeout(() => {
+          stream.write('terminal length 0\n');
+          stream.write('terminal width 512\n');
+          if (params.enablePassword) {
+            stream.write('enable\n');
+            setTimeout(() => {
+              stream.write(params.enablePassword + '\n');
+            }, 500);
+          }
+          setTimeout(() => {
+            stream.write('show version\n');
+            stream.write('show interfaces status\n');
+            stream.write('show ip interface brief\n');
+            stream.write('show vlan brief\n');
+            stream.write('show cdp neighbors\n');
+            setTimeout(() => {
+              stream.write('exit\n');
+            }, 3000);
+          }, 1500);
+        }, 500);
+      });
+    });
+
+    conn.on('error', (err: any) => {
+      if (!isSettled) {
+        isSettled = true;
+        clearTimeout(timer);
+        try { conn.end(); } catch {}
+        let msg = err.message || 'SSH connection error';
+        if (err.level === 'client-authentication') {
+          msg = `Authentication failed: Invalid SSH username or password for ${params.username}@${params.host}`;
+        } else if (err.code === 'ECONNREFUSED') {
+          msg = `Connection refused on ${params.host}:${port}`;
+        } else if (err.code === 'ETIMEDOUT') {
+          msg = `Host ${params.host}:${port} unreachable (timeout)`;
+        }
+        resolve({
+          success: false,
+          message: msg
+        });
+      }
+    });
+
+    try {
+      conn.connect({
+        host: params.host,
+        port,
+        username: params.username,
+        password: params.password,
+        readyTimeout: 12000,
+        tryKeyboard: true,
+        algorithms: COMPATIBLE_ALGORITHMS,
+        keepaliveInterval: 5000,
+        keepaliveCountMax: 3
+      });
+    } catch (e: any) {
+      if (!isSettled) {
+        isSettled = true;
+        clearTimeout(timer);
+        resolve({
+          success: false,
+          message: `Failed to initiate SSH: ${e.message}`
+        });
+      }
+    }
+  });
+}
+
+/**
+ * Synchronize real switch data with persistent backend/network_data.json
+ */
+export async function syncDeviceWithRealSwitch(
+  projectRoot: string,
+  params: {
+    deviceId?: string;
+    host: string;
+    port?: number;
+    username: string;
+    password?: string;
+    enablePassword?: string;
+  }
+) {
+  const syncRes = await fetchRealSwitchDataViaSsh({
+    host: params.host,
+    port: params.port || 22,
+    username: params.username,
+    password: params.password,
+    enablePassword: params.enablePassword
+  });
+
+  if (!syncRes.success || !syncRes.data) {
+    return syncRes;
+  }
+
+  const { device: devInfo, ports } = syncRes.data;
+  const dataFilePath = path.join(projectRoot, 'backend', 'network_data.json');
+
+  try {
+    if (fs.existsSync(dataFilePath)) {
+      const content = fs.readFileSync(dataFilePath, 'utf-8');
+      const data = JSON.parse(content);
+
+      // Find device by ID or by IP
+      let targetDevice = data.devices.find((d: any) => d.id === params.deviceId);
+      if (!targetDevice) {
+        targetDevice = data.devices.find((d: any) => d.ip === params.host);
+      }
+
+      if (targetDevice) {
+        if (devInfo.model) targetDevice.model = devInfo.model;
+        if (devInfo.firmware) targetDevice.firmware = devInfo.firmware;
+        if (devInfo.uptime) targetDevice.uptime = devInfo.uptime;
+        if (devInfo.mac) targetDevice.mac = devInfo.mac;
+        if (devInfo.serial) targetDevice.serial = devInfo.serial;
+        if (devInfo.hostname && targetDevice.name === 'New-Switch') {
+          targetDevice.name = devInfo.hostname;
+        }
+        targetDevice.is_online = true;
+        targetDevice.last_seen = 'Just now';
+        targetDevice.total_ports = ports.length > 0 ? ports.length : (targetDevice.total_ports || 24);
+        targetDevice.ssh_port = params.port || 22;
+        targetDevice.ssh_username = params.username;
+        if (params.password) targetDevice.ssh_password = params.password;
+        if (params.enablePassword) targetDevice.enable_password = params.enablePassword;
+
+        if (ports.length > 0) {
+          if (!data.ports) data.ports = {};
+          data.ports[targetDevice.id] = ports;
+        }
+
+        fs.writeFileSync(dataFilePath, JSON.stringify(data, null, 2), 'utf-8');
+        return {
+          success: true,
+          message: `Device '${targetDevice.name}' synced successfully: ${ports.length} real ports discovered!`,
+          device: targetDevice,
+          ports: ports
+        };
+      }
+    }
+  } catch (fsErr: any) {
+    console.error('[SSH Sync] Error updating network_data.json:', fsErr);
+  }
+
+  return {
+    success: true,
+    message: `Discovered ${ports.length} ports from switch ${params.host}`,
+    data: syncRes.data,
+    ports: ports
+  };
+}
+

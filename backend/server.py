@@ -1139,37 +1139,46 @@ class NetworkAPIHandler(BaseHTTPRequestHandler):
                 "is_online": is_reachable,
                 "latency_ms": reach_lat if is_reachable else None,
                 "packet_loss": reach_loss,
-                "uptime": "1 hour" if is_reachable else "Offline",
+                "uptime": body.get("uptime", "1 hour" if is_reachable else "Offline"),
                 "cdp_enabled": body.get("cdp_enabled", True),
                 "lldp_enabled": body.get("lldp_enabled", True),
                 "snmp_community": body.get("snmp_community", "public"),
                 "firmware": body.get("firmware", "IOS-XE 17.03"),
                 "last_seen": "Just now" if is_reachable else "Unreachable",
-                "total_ports": int(body.get("total_ports", 24))
+                "total_ports": int(body.get("total_ports", 24)),
+                "ssh_port": int(body.get("ssh_port", 22)),
+                "ssh_username": body.get("ssh_username", "admin"),
+                "ssh_password": body.get("ssh_password", ""),
+                "enable_password": body.get("enable_password", ""),
+                "serial": body.get("serial", "")
             }
             data["devices"].append(new_device)
 
-            # Generate default ports for new device
-            total_ports = new_device["total_ports"]
-            new_ports = []
-            for i in range(1, total_ports + 1):
-                p_status = "up" if i <= 4 else ("down" if i % 2 == 0 else "up")
-                new_ports.append({
-                    "port_id": f"Gi1/0/{i}",
-                    "name": f"GigabitEthernet1/0/{i}",
-                    "status": p_status,
-                    "admin_status": "enabled",
-                    "mode": "trunk" if i == 1 else "access",
-                    "vlan": 1 if i == 1 else (10 if i <= 8 else 20),
-                    "allowed_vlans": "1,10,20,30,50" if i == 1 else str(10 if i <= 8 else 20),
-                    "speed": "1 Gbps",
-                    "duplex": "Full",
-                    "connected_device": "Host Link" if p_status == "up" else "Disconnected",
-                    "connected_type": "Host" if p_status == "up" else "None",
-                    "poe_status": "off",
-                    "poe_power": 0,
-                    "description": f"Port {i}"
-                })
+            # Use real switch ports if provided from live SSH discovery, otherwise fallback
+            if "ports" in body and isinstance(body["ports"], list) and len(body["ports"]) > 0:
+                new_ports = body["ports"]
+                new_device["total_ports"] = len(new_ports)
+            else:
+                total_ports = new_device["total_ports"]
+                new_ports = []
+                for i in range(1, total_ports + 1):
+                    p_status = "up" if i <= 4 else ("down" if i % 2 == 0 else "up")
+                    new_ports.append({
+                        "port_id": f"Gi1/0/{i}",
+                        "name": f"GigabitEthernet1/0/{i}",
+                        "status": p_status,
+                        "admin_status": "enabled",
+                        "mode": "trunk" if i == 1 else "access",
+                        "vlan": 1 if i == 1 else (10 if i <= 8 else 20),
+                        "allowed_vlans": "1,10,20,30,50" if i == 1 else str(10 if i <= 8 else 20),
+                        "speed": "1 Gbps",
+                        "duplex": "Full",
+                        "connected_device": "Host Link" if p_status == "up" else "Disconnected",
+                        "connected_type": "Host" if p_status == "up" else "None",
+                        "poe_status": "off",
+                        "poe_power": 0,
+                        "description": f"Port {i}"
+                    })
             data["ports"][new_id] = new_ports
             save_data(data)
             self._send_json(201, {"device": new_device, "message": "تجهیز جدید با موفقیت اضافه شد."})
@@ -1507,7 +1516,12 @@ class NetworkAPIHandler(BaseHTTPRequestHandler):
                 self._send_json(404, {"error": "Device not found"})
                 return
 
-            for k in ["name", "ip", "type", "role", "model", "building", "floor", "unit", "rack", "cdp_enabled", "lldp_enabled", "snmp_community", "is_online"]:
+            for k in [
+                "name", "ip", "type", "role", "model", "building", "floor", "unit", "rack",
+                "cdp_enabled", "lldp_enabled", "snmp_community", "is_online", "ssh_port",
+                "ssh_username", "ssh_password", "enable_password", "firmware", "uptime",
+                "mac", "serial", "total_ports"
+            ]:
                 if k in body:
                     device[k] = body[k]
             save_data(data)

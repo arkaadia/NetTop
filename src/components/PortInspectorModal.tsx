@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { X, Cable, Zap, Shield, ShieldCheck, ShieldAlert, CheckCircle2, AlertCircle, Edit3, Save, Power, Terminal, AlertTriangle, ArrowRight, Check, Lock, Key, Layers, CheckSquare, Square } from 'lucide-react';
+import { X, Cable, Zap, Shield, ShieldCheck, ShieldAlert, CheckCircle2, AlertCircle, Edit3, Save, Power, Terminal, AlertTriangle, ArrowRight, Check, Lock, Key, Layers, CheckSquare, Square, RefreshCw, Sparkles } from 'lucide-react';
 import { Device, SwitchPort } from '../types';
-import { fetchDevicePorts, updateSwitchPort, writeMemory, batchUpdateSwitchPorts } from '../services/api';
+import { fetchDevicePorts, updateSwitchPort, writeMemory, batchUpdateSwitchPorts, syncDeviceWithRealSwitch } from '../services/api';
 import { NetworkPortSvg } from './NetworkPortSvg';
 import { CiscoPortContextMenu } from './CiscoPortContextMenu';
 import { CiscoCommandConfirmModal } from './CiscoCommandConfirmModal';
 import { AssignVlanModal } from './AssignVlanModal';
+import { RealSshTerminalModal } from './RealSshTerminalModal';
 import { useLanguage } from '../i18n/LanguageContext';
 
 interface PortInspectorModalProps {
@@ -75,6 +76,13 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
   const [selectedPortIds, setSelectedPortIds] = useState<string[]>([]);
   const [isBatchApplying, setIsBatchApplying] = useState(false);
   const [batchSuccessMessage, setBatchSuccessMessage] = useState<string | null>(null);
+
+  // Standalone Real SSH Terminal modal state
+  const [isSshTerminalOpen, setIsSshTerminalOpen] = useState(false);
+
+  // Real Switch Port Synchronization state
+  const [isSyncingRealPorts, setIsSyncingRealPorts] = useState(false);
+  const [syncStatusMessage, setSyncStatusMessage] = useState<{ text: string; isSuccess: boolean } | null>(null);
 
   // Batch edit form values
   const [batchAdminStatus, setBatchAdminStatus] = useState<'no_change' | 'enabled' | 'disabled'>('no_change');
@@ -222,6 +230,52 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
       setError(err.message || 'خطا در بارگذاری اطلاعات پورت‌ها');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSyncRealPorts = async () => {
+    if (!device) return;
+    try {
+      setIsSyncingRealPorts(true);
+      setSyncStatusMessage({
+        text: isEn ? 'Connecting to switch via SSH and reading live interfaces...' : 'در حال اتصال به سوئیچ از طریق SSH و استخراج دقیق اینترفیس‌های فیزیکی...',
+        isSuccess: true,
+      });
+
+      const res = await syncDeviceWithRealSwitch({
+        deviceId: device.id,
+        host: device.ip,
+        port: device.ssh_port || 22,
+        username: device.ssh_username || 'admin',
+        password: device.ssh_password,
+        enablePassword: device.enable_password,
+      });
+
+      if (res.success && res.data) {
+        await loadPorts();
+        if (onPortUpdated) onPortUpdated();
+        const portCount = res.data.ports?.length || 0;
+        const devModel = res.data.device?.model || device.model;
+        setSyncStatusMessage({
+          text: isEn
+            ? `Successfully synchronized ${portCount} real physical ports from switch (${devModel})!`
+            : `تعداد ${portCount} پورت واقعی سخت‌افزار با موفقیت از سوئیچ (${devModel}) استخراج و همگام شد!`,
+          isSuccess: true,
+        });
+      } else {
+        setSyncStatusMessage({
+          text: isEn ? `Sync failed: ${res.message}` : `خطا در همگام‌سازی پورت‌ها: ${res.message}`,
+          isSuccess: false,
+        });
+      }
+    } catch (err: any) {
+      setSyncStatusMessage({
+        text: isEn ? `SSH Sync error: ${err.message}` : `خطا در ارتباط SSH و استخراج پورت‌ها: ${err.message}`,
+        isSuccess: false,
+      });
+    } finally {
+      setIsSyncingRealPorts(false);
+      setTimeout(() => setSyncStatusMessage(null), 6000);
     }
   };
 
@@ -625,17 +679,34 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
               </div>
             )}
 
-            {/* Direct Connect to Cisco Terminal */}
-            {onConnectTerminal && (
-              <button
-                onClick={() => onConnectTerminal(device)}
-                className="cisco-terminal-header-btn flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition shadow-sm cursor-pointer"
-                title={isEn ? 'Direct connection to Cisco CLI Terminal' : 'اتصال مستقیم به خط فرمان ترمینال سیسکو (CLI)'}
-              >
-                <Terminal className="w-4 h-4 text-emerald-400" />
-                <span className="font-sans font-bold">{isEn ? 'Cisco Terminal' : 'ترمینال سیسکو'}</span>
-              </button>
-            )}
+            {/* Sync Real Ports from Switch via SSH */}
+            <button
+              onClick={handleSyncRealPorts}
+              disabled={isSyncingRealPorts}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-sm cursor-pointer disabled:opacity-50"
+              title={isEn ? `Query real switch ${device.name} (${device.ip}) via SSH and read live ports` : `اتصال به ${device.name} (${device.ip}) با SSH و خواندن پورت‌های واقعی`}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncingRealPorts ? 'animate-spin' : ''}`} />
+              <span className="font-sans font-bold">
+                {isSyncingRealPorts ? (isEn ? 'Reading Ports...' : 'در حال خواندن...') : (isEn ? 'Sync Real Ports' : 'همگام‌سازی پورت‌های واقعی')}
+              </span>
+            </button>
+
+            {/* Direct Connect to Cisco Terminal via Real SSH */}
+            <button
+              onClick={() => {
+                if (onConnectTerminal) {
+                  onConnectTerminal(device);
+                } else {
+                  setIsSshTerminalOpen(true);
+                }
+              }}
+              className="cisco-terminal-header-btn flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition shadow-sm cursor-pointer"
+              title={isEn ? `Direct SSH connection to ${device.name} (${device.ip}:22)` : `اتصال مستقیم SSH به ${device.name} (پورت ۲۲ روی ${device.ip})`}
+            >
+              <Terminal className="w-4 h-4 text-emerald-400" />
+              <span className="font-sans font-bold">{isEn ? 'Cisco Terminal' : 'ترمینال سیسکو'}</span>
+            </button>
 
             <button
               onClick={onClose}
@@ -645,6 +716,34 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Real Switch Sync Status Banner */}
+        {syncStatusMessage && (
+          <div
+            className={`px-5 py-2.5 text-xs flex items-center justify-between border-b ${
+              syncStatusMessage.isSuccess
+                ? 'bg-emerald-950/80 text-emerald-200 border-emerald-800'
+                : 'bg-rose-950/80 text-rose-200 border-rose-800'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {isSyncingRealPorts ? (
+                <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" />
+              ) : syncStatusMessage.isSuccess ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-400" />
+              )}
+              <span className="font-medium">{syncStatusMessage.text}</span>
+            </div>
+            <button
+              onClick={() => setSyncStatusMessage(null)}
+              className="text-slate-400 hover:text-white text-xs cursor-pointer px-1"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Content Body */}
         <div className="p-5 overflow-y-auto space-y-4 flex-1">
@@ -656,6 +755,11 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
                 <span className="text-xs font-bold text-slate-200 font-mono">
                   Switch Faceplate: {device.model} ({ports.length} Ports)
                 </span>
+                {device.serial && (
+                  <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-cyan-300 font-mono text-[10px]">
+                    SN: {device.serial}
+                  </span>
+                )}
               </div>
               {/* Legend & Multi-select Hint */}
               <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-400">
@@ -1718,6 +1822,22 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
             port={vlanAssignModalPort}
             device={device}
             isLoading={isAssigningVlan}
+          />
+        )}
+
+        {/* Real SSH Terminal Modal directly into this switch */}
+        {isSshTerminalOpen && device && (
+          <RealSshTerminalModal
+            isOpen={isSshTerminalOpen}
+            onClose={() => setIsSshTerminalOpen(false)}
+            device={device}
+            initialHost={device.ip}
+            initialPort={device.ssh_port || 22}
+            initialUsername={device.ssh_username || 'admin'}
+            initialPassword={device.ssh_password || ''}
+            initialEnablePassword={device.enable_password || ''}
+            autoConnect={true}
+            onDeviceUpdated={onPortUpdated}
           />
         )}
       </div>

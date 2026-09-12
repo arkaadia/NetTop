@@ -3,7 +3,12 @@ import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import http from 'http';
 import { createServer as createViteServer } from 'vite';
-import { testRealSshConnection, setupSshWebSocketServer } from './server/sshManager';
+import {
+  testRealSshConnection,
+  setupSshWebSocketServer,
+  fetchRealSwitchDataViaSsh,
+  syncDeviceWithRealSwitch
+} from './server/sshManager';
 
 // Safely determine current directory and project root in both CJS bundle and TSX ESM dev mode
 const getCurrentDir = () => {
@@ -103,6 +108,91 @@ app.post('/api/ssh/test', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: `SSH test error: ${err.message}`
+    });
+  }
+});
+
+// Discover real hardware specs & ports from switch via SSH
+app.post('/api/ssh/discover', async (req: Request, res: Response) => {
+  try {
+    const { host, port, username, password, enablePassword, timeoutMs } = req.body || {};
+    if (!host || !username) {
+      return res.status(400).json({
+        success: false,
+        message: 'Host and username are required for switch discovery'
+      });
+    }
+
+    console.log(`[SSH Discovery] Querying physical switch ${username}@${host}:${port || 22} for real hardware specs & ports...`);
+    const result = await fetchRealSwitchDataViaSsh({
+      host,
+      port: Number(port) || 22,
+      username,
+      password: password || '',
+      enablePassword: enablePassword || '',
+      timeoutMs: Number(timeoutMs) || 25000
+    });
+
+    res.json(result);
+  } catch (err: any) {
+    console.error('[SSH Discovery] Unexpected error in /api/ssh/discover:', err);
+    res.status(500).json({
+      success: false,
+      message: `Discovery error: ${err.message}`
+    });
+  }
+});
+
+// Synchronize real hardware specs & ports from switch into persistent database
+app.post('/api/ssh/sync-device', async (req: Request, res: Response) => {
+  try {
+    let { deviceId, host, port, username, password, enablePassword } = req.body || {};
+
+    // If deviceId provided, load credentials from network_data.json if not provided in payload
+    if (deviceId && (!host || !username)) {
+      try {
+        const fs = await import('fs');
+        const dataPath = path.join(projectRoot, 'backend', 'network_data.json');
+        if (fs.existsSync(dataPath)) {
+          const raw = fs.readFileSync(dataPath, 'utf-8');
+          const parsed = JSON.parse(raw);
+          const found = (parsed.devices || []).find((d: any) => d.id === deviceId);
+          if (found) {
+            host = host || found.ip;
+            port = port || found.ssh_port || 22;
+            username = username || found.ssh_username || 'admin';
+            password = password !== undefined ? password : (found.ssh_password || '');
+            enablePassword = enablePassword !== undefined ? enablePassword : (found.enable_password || '');
+          }
+        }
+      } catch (loadErr) {
+        console.warn('[SSH Sync] Error reading device info from file:', loadErr);
+      }
+    }
+
+    if (!host || !username) {
+      return res.status(400).json({
+        success: false,
+        message: 'Host and username are required for switch synchronization'
+      });
+    }
+
+    console.log(`[SSH Sync] Synchronizing switch ${deviceId || host} (${username}@${host}:${port || 22})...`);
+    const result = await syncDeviceWithRealSwitch(projectRoot, {
+      deviceId,
+      host,
+      port: Number(port) || 22,
+      username,
+      password: password || '',
+      enablePassword: enablePassword || ''
+    });
+
+    res.json(result);
+  } catch (err: any) {
+    console.error('[SSH Sync] Unexpected error in /api/ssh/sync-device:', err);
+    res.status(500).json({
+      success: false,
+      message: `Synchronization error: ${err.message}`
     });
   }
 });

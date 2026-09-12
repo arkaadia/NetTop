@@ -292,3 +292,39 @@ export async function testRealSsh(params: import('../types').RealSshTestRequest)
   return res.json();
 }
 
+export async function discoverRealSwitch(
+  params: import('../types').RealSshTestRequest
+): Promise<import('../types').RealSwitchDiscoveryResult> {
+  const res = await fetch(`${API_BASE}/ssh/discover`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({ message: 'SSH discovery service unreachable' }));
+    throw new Error(errData.message || 'Failed to discover switch details');
+  }
+  return res.json();
+}
+
+export async function syncDeviceWithRealSwitch(params: {
+  deviceId?: string;
+  host?: string;
+  port?: number;
+  username?: string;
+  password?: string;
+  enablePassword?: string;
+}): Promise<import('../types').RealSwitchDiscoveryResult> {
+  const res = await fetch(`${API_BASE}/ssh/sync-device`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({ message: 'SSH sync service unreachable' }));
+    throw new Error(errData.message || 'Failed to sync with switch');
+  }
+  return res.json();
+}
+
+

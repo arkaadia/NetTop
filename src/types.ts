@@ -29,6 +29,7 @@ export interface Device {
   ssh_password?: string;
   enable_password?: string;
   ssh_status?: 'connected' | 'authenticated' | 'disconnected' | 'failed';
+  serial?: string;
 }
 
 export interface DeviceConnectionTestResult {
@@ -70,6 +71,25 @@ export interface RealSshTestResult {
     cipher?: string;
     keyExchange?: string;
   };
+}
+
+export interface RealSwitchDiscoveryResult {
+  success: boolean;
+  message: string;
+  data?: {
+    device: {
+      model?: string;
+      firmware?: string;
+      uptime?: string;
+      mac?: string;
+      serial?: string;
+      hostname?: string;
+      total_ports?: number;
+    };
+    ports: SwitchPort[];
+  };
+  device?: Device;
+  ports?: SwitchPort[];
 }
 
 export interface SwitchPort {

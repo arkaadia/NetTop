@@ -20,29 +20,35 @@ import {
   Sparkles,
   Layers,
   ArrowRight,
-  ShieldCheck
+  ShieldCheck,
+  Save,
+  Cpu,
+  Search,
+  BookOpen,
+  ChevronDown,
+  ChevronUp,
+  Key,
+  RefreshCw,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { parseAnsiToSpans } from '../utils/ansi';
 import { DangerousCommandModal } from './DangerousCommandModal';
+import { updateDevice, fetchDevicePorts, fetchVlans } from '../services/api';
+import { Device, SwitchPort, VlanInfo } from '../types';
 
 interface RealSshTerminalModalProps {
   isOpen: boolean;
   onClose: () => void;
-  device?: {
-    name?: string;
-    ip?: string;
-    ssh_port?: number;
-    ssh_username?: string;
-    ssh_password?: string;
-    enable_password?: string;
-    model?: string;
-  } | null;
+  device?: Device | null;
   initialHost?: string;
   initialPort?: number;
   initialUsername?: string;
   initialPassword?: string;
   initialEnablePassword?: string;
+  autoConnect?: boolean;
+  onDeviceUpdated?: () => void;
 }
 
 const DANGEROUS_PATTERNS = [
@@ -78,6 +84,34 @@ const DANGEROUS_PATTERNS = [
   }
 ];
 
+interface CommandGuideItem {
+  cmd: string;
+  descEn: string;
+  descFa: string;
+  category: 'show' | 'config' | 'exec' | 'vlan';
+}
+
+const CISCO_COMMAND_GUIDE: CommandGuideItem[] = [
+  { cmd: 'terminal length 0', descEn: 'Disable CLI pagination for uninterrupted command output', descFa: 'غیرفعال‌سازی صفحه‌بندی خط فرمان برای نمایش پیوسته خروجی', category: 'exec' },
+  { cmd: 'enable', descEn: 'Enter Cisco Privileged EXEC mode (#)', descFa: 'ورود به حالت دسترسی ویژه با اختیارات ادمین', category: 'exec' },
+  { cmd: 'show version', descEn: 'Display IOS software version, uptime, hardware model, and serials', descFa: 'نمایش نسخه IOS، زمان روشن بودن، مدل سخت‌افزار و حافظه', category: 'show' },
+  { cmd: 'show ip interface brief', descEn: 'Summary of all interfaces, assigned IP addresses, and layer 1/2 status', descFa: 'خلاصه وضعیت تمامی اینترفیس‌ها، آدرس IP و وضعیت فیزیکی/پروتکلی', category: 'show' },
+  { cmd: 'show interfaces status', descEn: 'Port connection status, duplex, speed, and access/trunk VLAN assignment', descFa: 'وضعیت پورت‌ها، سرعت، داپلکس و شماره ویلن اختصاص‌یافته', category: 'show' },
+  { cmd: 'show vlan brief', descEn: 'List of all active VLANs and their assigned physical switchports', descFa: 'لیست تمام ویلن‌های فعال و پورت‌های اختصاص‌یافته به آن‌ها', category: 'vlan' },
+  { cmd: 'show running-config', descEn: 'Display entire active running configuration currently in RAM', descFa: 'مشاهده کامل کانفیگ فعال و جاری سوییچ در رم', category: 'show' },
+  { cmd: 'show cdp neighbors', descEn: 'Discover directly connected Cisco switches, routers, and phones', descFa: 'کشف تجهیزات متصل همسایه سیسکو با پروتکل CDP', category: 'show' },
+  { cmd: 'show mac address-table', descEn: 'Inspect learned dynamic MAC addresses and corresponding switchports', descFa: 'مشاهده جدول آدرس‌های فیزیکی مک و پورت‌های مربوطه', category: 'show' },
+  { cmd: 'show ip route', descEn: 'Display current IP routing table, connected subnets, and gateways', descFa: 'مشاهده جدول مسیریابی IP، شبکه‌های متصل و گیت‌وی پیش‌فرض', category: 'show' },
+  { cmd: 'write memory', descEn: 'Save active running configuration from RAM into NVRAM startup-config', descFa: 'ذخیره کانفیگ جاری در حافظه NVRAM استارت‌آپ (رایت مموری)', category: 'exec' },
+  { cmd: 'configure terminal', descEn: 'Enter global configuration mode (config)#', descFa: 'ورود به حالت پیکربندی سراسری سوییچ', category: 'config' },
+  { cmd: 'interface GigabitEthernet1/0/1', descEn: 'Select physical interface for configuration', descFa: 'انتخاب اینترفیس فیزیکی جهت اعمال تنظیمات', category: 'config' },
+  { cmd: 'switchport mode access', descEn: 'Set port as an access port for end devices', descFa: 'تنظیم پورت در حالت Access برای کلاینت‌ها', category: 'config' },
+  { cmd: 'switchport access vlan 10', descEn: 'Assign access port to VLAN 10', descFa: 'اختصاص پورت دسترسی به شماره ویلن ۱۰', category: 'vlan' },
+  { cmd: 'switchport mode trunk', descEn: 'Configure interface as 802.1Q trunk link', descFa: 'پیکربندی پورت به عنوان ترانک برای عبور چند ویلن', category: 'config' },
+  { cmd: 'no shutdown', descEn: 'Enable and activate interface (administratively up)', descFa: 'فعال‌سازی اینترفیس و خارج کردن از وضعیت خاموش', category: 'config' },
+  { cmd: 'shutdown', descEn: 'Administratively disable the selected interface', descFa: 'غیرفعال‌سازی دستی اینترفیس انتخابی', category: 'config' },
+];
+
 export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
   isOpen,
   onClose,
@@ -87,8 +121,13 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
   initialUsername,
   initialPassword,
   initialEnablePassword,
+  autoConnect = true,
+  onDeviceUpdated,
 }) => {
   const { isEn } = useLanguage();
+
+  // Mode: Real SSH (Live Port 22) vs Simulation (Offline Fallback)
+  const [terminalEngine, setTerminalEngine] = useState<'real_ssh' | 'simulator'>('real_ssh');
 
   // Connection Parameters
   const [host, setHost] = useState('');
@@ -96,6 +135,10 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
   const [enablePassword, setEnablePassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showEnablePassword, setShowEnablePassword] = useState(false);
+  const [isSavingCreds, setIsSavingCreds] = useState(false);
+  const [saveCredsMessage, setSaveCredsMessage] = useState<string | null>(null);
 
   // Terminal State
   const [terminalOutput, setTerminalOutput] = useState<string>('');
@@ -110,6 +153,10 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [autoDisablePaging, setAutoDisablePaging] = useState(true);
   const [hasPagingPrompt, setHasPagingPrompt] = useState(false);
+  const [showCredsDrawer, setShowCredsDrawer] = useState(false);
+  const [showGuideDrawer, setShowGuideDrawer] = useState(false);
+  const [guideSearch, setGuideSearch] = useState('');
+  const [guideCategory, setGuideCategory] = useState<'all' | 'show' | 'config' | 'exec' | 'vlan'>('all');
 
   // Dangerous Command Modal
   const [pendingDangerousCmd, setPendingDangerousCmd] = useState<string | null>(null);
@@ -119,6 +166,11 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
   const wsRef = useRef<WebSocket | null>(null);
   const terminalEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Simulated Fallback State (when physical switch is unreachable or simulator toggled)
+  const [simMode, setSimMode] = useState<'USER' | 'PRIV' | 'CONF'>('USER');
+  const [simPorts, setSimPorts] = useState<SwitchPort[]>([]);
+  const [simVlans, setSimVlans] = useState<VlanInfo[]>([]);
 
   // Initialize parameters when modal opens
   useEffect(() => {
@@ -139,10 +191,32 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
       setStatusMessage('');
       setBanner('');
       setHasPagingPrompt(false);
+      setTerminalEngine('real_ssh');
+      setShowCredsDrawer(false);
+      setSaveCredsMessage(null);
+
+      // Load ports/vlans for simulation fallback if needed
+      if (device?.id) {
+        fetchDevicePorts(device.id).then((r) => setSimPorts(r.ports)).catch(() => {});
+        fetchVlans().then((r) => setSimVlans(r.vlans)).catch(() => {});
+      }
+
+      // If password is missing or empty, automatically open credentials drawer so user can supply it
+      if (!targetPass) {
+        setShowCredsDrawer(true);
+      }
+
+      // Automatically initiate live SSH connection
+      if (autoConnect !== false && targetHost) {
+        const connectTimer = setTimeout(() => {
+          connectWs(targetHost, targetPort, targetUser, targetPass, targetEnable);
+        }, 120);
+        return () => clearTimeout(connectTimer);
+      }
     } else {
       disconnectWs();
     }
-  }, [isOpen, device, initialHost, initialPort, initialUsername, initialPassword, initialEnablePassword]);
+  }, [isOpen, device, initialHost, initialPort, initialUsername, initialPassword, initialEnablePassword, autoConnect]);
 
   // Scroll to bottom when output changes
   useEffect(() => {
@@ -151,10 +225,10 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
 
   // Focus input automatically
   useEffect(() => {
-    if (connectionStatus === 'ready') {
+    if (connectionStatus === 'ready' || terminalEngine === 'simulator') {
       inputRef.current?.focus();
     }
-  }, [connectionStatus]);
+  }, [connectionStatus, terminalEngine]);
 
   // Disconnect WebSocket
   const disconnectWs = () => {
@@ -169,16 +243,36 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
   };
 
   // Connect via WebSocket
-  const connectWs = () => {
-    if (!host.trim() || !username.trim()) {
+  const connectWs = (
+    overrideHost?: string,
+    overridePort?: number,
+    overrideUsername?: string,
+    overridePassword?: string,
+    overrideEnablePassword?: string
+  ) => {
+    const targetHost = overrideHost !== undefined ? overrideHost : host;
+    const targetPort = overridePort !== undefined ? overridePort : port;
+    const targetUsername = overrideUsername !== undefined ? overrideUsername : username;
+    const targetPassword = overridePassword !== undefined ? overridePassword : password;
+    const targetEnablePassword = overrideEnablePassword !== undefined ? overrideEnablePassword : enablePassword;
+
+    if (!targetHost.trim() || !targetUsername.trim()) {
       setStatusMessage(isEn ? 'Host and username are required' : 'آدرس هاست و نام کاربری الزامی است');
+      setShowCredsDrawer(true);
       return;
     }
 
+    setTerminalEngine('real_ssh');
     disconnectWs();
     setConnectionStatus('connecting');
-    setStatusMessage(isEn ? `Connecting to ${username}@${host}:${port}...` : `در حال برقراری اتصال به ${username}@${host}:${port}...`);
-    setTerminalOutput('');
+    setStatusMessage(
+      isEn
+        ? `Connecting to ${targetUsername}@${targetHost}:${targetPort} via SSH...`
+        : `در حال برقراری اتصال به ${targetUsername}@${targetHost}:${targetPort} از طریق SSH...`
+    );
+    setTerminalOutput(
+      `\r\n[SSH] Connecting to ${targetHost}:${targetPort} using user '${targetUsername}'...\r\n`
+    );
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws/ssh`;
@@ -192,13 +286,13 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
         ws.send(
           JSON.stringify({
             type: 'connect',
-            host: host.trim(),
-            port: Number(port) || 22,
-            username: username.trim(),
-            password: password,
-            enablePassword: enablePassword,
-            termCols: 100,
-            termRows: 32,
+            host: targetHost.trim(),
+            port: Number(targetPort) || 22,
+            username: targetUsername.trim(),
+            password: targetPassword,
+            enablePassword: targetEnablePassword,
+            termCols: 110,
+            termRows: 34,
           })
         );
       };
@@ -220,7 +314,11 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
           } else if (msg.type === 'status') {
             if (msg.status === 'ready') {
               setConnectionStatus('ready');
-              setStatusMessage(isEn ? 'Interactive SSH Session Active' : 'اتصال ترمینال تعاملی فعال شد');
+              setStatusMessage(
+                isEn
+                  ? `Connected to ${targetHost} (Port ${targetPort})`
+                  : `اتصال فعال به ${targetHost} (پورت ${targetPort})`
+              );
               // Automatically disable pagination if toggled
               if (autoDisablePaging) {
                 setTimeout(() => {
@@ -229,7 +327,9 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
               }
             } else if (msg.status === 'authenticated') {
               setConnectionStatus('authenticated');
-              setStatusMessage(isEn ? 'Authenticated! Opening PTY...' : 'احراز هویت تایید شد! در حال بازگشایی ترمینال...');
+              setStatusMessage(
+                isEn ? 'Authenticated! Establishing PTY...' : 'احراز هویت تایید شد! در حال راه‌اندازی PTY...'
+              );
             } else if (msg.status === 'closed' || msg.status === 'disconnected') {
               setConnectionStatus('disconnected');
               setStatusMessage(msg.message || (isEn ? 'Connection closed' : 'ارتباط قطع شد'));
@@ -239,7 +339,11 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
           } else if (msg.type === 'error') {
             setConnectionStatus('error');
             setStatusMessage(msg.message || (isEn ? 'SSH connection error' : 'خطای اتصال SSH'));
-            setTerminalOutput((prev) => `${prev}\n\r[ERROR] ${msg.message}\n\r`);
+            setTerminalOutput(
+              (prev) =>
+                `${prev}\r\n\x1b[31m[SSH ERROR] ${msg.message}\x1b[0m\r\n\x1b[33mHint: Verify device reachability or check credentials. If on local network, run './run-local-ssh.sh'. You can also switch to Simulator Mode.\x1b[0m\r\n`
+            );
+            setShowCredsDrawer(true);
           }
         } catch {
           // If raw text
@@ -261,10 +365,84 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
     }
   };
 
+  // Save Credentials permanently to Device
+  const handleSaveCredentials = async () => {
+    if (!device?.id) return;
+    try {
+      setIsSavingCreds(true);
+      await updateDevice(device.id, {
+        ip: host.trim(),
+        ssh_port: Number(port) || 22,
+        ssh_username: username.trim(),
+        ssh_password: password,
+        enable_password: enablePassword,
+      });
+      setSaveCredsMessage(isEn ? 'Credentials saved to device successfully' : 'مشخصات با موفقیت روی دستگاه ذخیره شد');
+      setTimeout(() => setSaveCredsMessage(null), 3000);
+      if (onDeviceUpdated) onDeviceUpdated();
+    } catch (err: any) {
+      setSaveCredsMessage(isEn ? `Failed: ${err.message}` : `خطا در ذخیره: ${err.message}`);
+    } finally {
+      setIsSavingCreds(false);
+    }
+  };
+
   // Send raw data to remote device
   const sendRawData = (data: string) => {
+    if (terminalEngine === 'simulator') {
+      executeSimulatedCommand(data.replace(/\r|\n/g, ''));
+      return;
+    }
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'data', data }));
+    }
+  };
+
+  // Simulation mode executor (fallback when physical switch is unreachable)
+  const executeSimulatedCommand = (cmdStr: string) => {
+    const trimmed = cmdStr.trim();
+    const devHost = device?.name?.toUpperCase() || host || 'Switch';
+    const prompt = simMode === 'CONF' ? `${devHost}(config)#` : simMode === 'PRIV' ? `${devHost}#` : `${devHost}>`;
+
+    setTerminalOutput((prev) => `${prev}\r\n${prompt} ${trimmed}\r\n`);
+    if (!trimmed) return;
+
+    const lower = trimmed.toLowerCase();
+    if (lower === 'enable' || lower === 'en') {
+      setSimMode('PRIV');
+      setTerminalOutput((prev) => `${prev}${devHost}# `);
+    } else if (lower === 'disable') {
+      setSimMode('USER');
+      setTerminalOutput((prev) => `${prev}${devHost}> `);
+    } else if (lower === 'configure terminal' || lower === 'conf t') {
+      setSimMode('CONF');
+      setTerminalOutput((prev) => `${prev}Enter configuration commands, one per line. End with CNTL/Z.\r\n${devHost}(config)# `);
+    } else if (lower === 'exit' || lower === 'end') {
+      if (simMode === 'CONF') setSimMode('PRIV');
+      else setSimMode('USER');
+    } else if (lower === 'clear' || lower === 'cls') {
+      setTerminalOutput('');
+    } else if (lower.startsWith('show ver')) {
+      setTerminalOutput(
+        (prev) =>
+          `${prev}Cisco IOS XE Software, Version 17.09.03\r\nTechnical Support: http://www.cisco.com/techsupport\r\nDevice: ${device?.model || 'Catalyst 9300'}\r\nUptime is ${device?.uptime || '142 days, 6 hours'}\r\nProcessor board ID FOC2239401A\r\nBase Ethernet MAC: ${device?.mac || '00:50:56:A1:B2:C0'}\r\n`
+      );
+    } else if (lower.startsWith('show ip int')) {
+      let tbl = 'Interface                  IP-Address      OK? Method Status                Protocol\r\n----------------------------------------------------------------------------------------\r\n';
+      tbl += `Vlan1                      ${host.padEnd(15)} YES NVRAM  up                    up\r\n`;
+      simPorts.slice(0, 8).forEach((p) => {
+        tbl += `${p.port_id.padEnd(26)} unassigned      YES unset  ${p.status.padEnd(21)} ${p.status}\r\n`;
+      });
+      setTerminalOutput((prev) => prev + tbl);
+    } else if (lower.startsWith('show run')) {
+      setTerminalOutput(
+        (prev) =>
+          `${prev}Building configuration...\r\n!\r\nhostname ${devHost}\r\n!\r\nspanning-tree mode rapid-pvst\r\n!\r\ninterface Vlan1\r\n ip address ${host} 255.255.255.0\r\n no shutdown\r\n!\r\nline vty 0 4\r\n transport input ssh\r\n login local\r\n!\r\nend\r\n`
+      );
+    } else if (lower.startsWith('write mem') || lower === 'wr') {
+      setTerminalOutput((prev) => `${prev}Building configuration...\r\n[OK]\r\nConfiguration saved to NVRAM successfully.\r\n`);
+    } else {
+      setTerminalOutput((prev) => `${prev}% Unknown or simulated command: "${trimmed}". Switch to Real SSH for hardware execution.\r\n`);
     }
   };
 
@@ -326,7 +504,6 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
     setPendingDangerousCmd(null);
     setDangerousReason('');
     setCurrentInput('');
-    // Send Ctrl+C to cancel any half-typed buffer on switch
     sendRawData('\x03');
     inputRef.current?.focus();
   };
@@ -355,7 +532,6 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
       }
     } else if (e.key === 'Tab') {
       e.preventDefault();
-      // Cisco TAB completion
       sendRawData(currentInput + '\t');
     } else if (e.ctrlKey && (e.key === 'c' || e.key === 'C')) {
       e.preventDefault();
@@ -381,32 +557,55 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
 
   if (!isOpen) return null;
 
+  const filteredGuide = CISCO_COMMAND_GUIDE.filter((item) => {
+    const matchesCategory = guideCategory === 'all' || item.category === guideCategory;
+    const matchesSearch =
+      !guideSearch.trim() ||
+      item.cmd.toLowerCase().includes(guideSearch.toLowerCase()) ||
+      item.descEn.toLowerCase().includes(guideSearch.toLowerCase()) ||
+      item.descFa.includes(guideSearch);
+    return matchesCategory && matchesSearch;
+  });
+
   return (
     <>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 modal-backdrop-blur"
+        className="fixed inset-0 z-[70] flex items-center justify-center p-2 sm:p-4 modal-backdrop-blur"
         data-modal-backdrop="true"
         dir={isEn ? 'ltr' : 'rtl'}
       >
         <div
           className={`bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-200 ${
-            isFullscreen ? 'w-full h-full rounded-none m-0' : 'w-full max-w-5xl h-[88vh]'
+            isFullscreen ? 'w-full h-full rounded-none m-0' : 'w-full max-w-5xl h-[90vh]'
           }`}
         >
           {/* Header Bar */}
           <div className="flex flex-wrap items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 text-slate-200 shrink-0 gap-2">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+              <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                 <TerminalIcon className="w-4 h-4" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-bold text-white font-mono flex items-center gap-1.5">
-                    <span>{device?.name || host || 'Real SSH Session'}</span>
-                    <span className="text-[11px] font-normal text-slate-400">
+                    <span>{device?.name || host || 'Cisco Switch Terminal'}</span>
+                    <span className="text-[11px] font-normal text-slate-400 font-mono">
                       ({username}@{host}:{port})
                     </span>
                   </h3>
+
+                  {/* Engine mode pill */}
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 font-sans ${
+                      terminalEngine === 'real_ssh'
+                        ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                    }`}
+                  >
+                    <Cpu className="w-2.5 h-2.5" />
+                    <span>{terminalEngine === 'real_ssh' ? 'Real SSH (Port 22)' : (isEn ? 'Offline Simulator' : 'شبیه‌ساز آفلاین')}</span>
+                  </span>
+
                   {/* Status indicator badge */}
                   <span
                     className={`px-2 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 font-sans ${
@@ -422,7 +621,7 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
                     {connectionStatus === 'ready' ? (
                       <>
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        <span>{isEn ? 'LIVE SSH' : 'متصل بلادرنگ'}</span>
+                        <span>{isEn ? 'LIVE' : 'متصل'}</span>
                       </>
                     ) : connectionStatus === 'connecting' || connectionStatus === 'authenticated' ? (
                       <>
@@ -432,46 +631,90 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
                     ) : connectionStatus === 'error' ? (
                       <>
                         <AlertCircle className="w-2.5 h-2.5 text-rose-400" />
-                        <span>{isEn ? 'ERROR' : 'خطا'}</span>
+                        <span>{isEn ? 'DISCONNECTED' : 'قطع'}</span>
                       </>
                     ) : (
                       <>
                         <WifiOff className="w-2.5 h-2.5 text-slate-400" />
-                        <span>{isEn ? 'OFFLINE' : 'قطع ارتباط'}</span>
+                        <span>{isEn ? 'OFFLINE' : 'قطع'}</span>
                       </>
                     )}
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-0.5 truncate max-w-md">
-                  {statusMessage || (isEn ? 'Direct TCP/SSH Port 22 Stream' : 'جریان مستقیم سوکت پورت ۲۲')}
+                  {statusMessage ||
+                    (isEn
+                      ? `Direct TCP Socket to ${device?.name || 'switch'} on Port ${port}`
+                      : `ارتباط مستقیم سوکت با ${device?.name || 'سوییچ'} روی پورت ${port}`)}
                 </p>
               </div>
             </div>
 
-            {/* Quick Actions & Modal Controls */}
+            {/* Header Actions */}
             <div className="flex items-center gap-1.5">
-              {connectionStatus === 'ready' ? (
-                <button
-                  onClick={disconnectWs}
-                  className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs font-medium border border-rose-500/30 transition cursor-pointer"
-                >
-                  {isEn ? 'Disconnect' : 'قطع اتصال'}
-                </button>
+              {/* Credentials / Settings button */}
+              <button
+                type="button"
+                onClick={() => setShowCredsDrawer(!showCredsDrawer)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition cursor-pointer flex items-center gap-1 ${
+                  showCredsDrawer
+                    ? 'bg-indigo-600 text-white border-indigo-500'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                }`}
+                title={isEn ? 'SSH Credentials & Port Settings' : 'تنظیمات پورت و احراز هویت SSH'}
+              >
+                <Key className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{isEn ? 'Credentials' : 'احراز هویت'}</span>
+              </button>
+
+              {/* Command Reference Guide Drawer button */}
+              <button
+                type="button"
+                onClick={() => setShowGuideDrawer(!showGuideDrawer)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition cursor-pointer flex items-center gap-1 ${
+                  showGuideDrawer
+                    ? 'bg-emerald-600 text-white border-emerald-500'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                }`}
+                title={isEn ? 'Cisco IOS Command Guide' : 'راهنمای دستورات سیسکو'}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{isEn ? 'Command Guide' : 'راهنمای دستورات'}</span>
+              </button>
+
+              {/* Engine Switcher */}
+              {terminalEngine === 'real_ssh' ? (
+                connectionStatus === 'ready' ? (
+                  <button
+                    onClick={disconnectWs}
+                    className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs font-medium border border-rose-500/30 transition cursor-pointer"
+                  >
+                    {isEn ? 'Disconnect' : 'قطع اتصال'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => connectWs()}
+                    disabled={connectionStatus === 'connecting'}
+                    className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-xs transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${connectionStatus === 'connecting' ? 'animate-spin' : ''}`} />
+                    <span>{isEn ? 'Connect SSH' : 'اتصال به SSH'}</span>
+                  </button>
+                )
               ) : (
                 <button
-                  onClick={connectWs}
-                  disabled={connectionStatus === 'connecting'}
-                  className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-xs transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                  onClick={() => connectWs()}
+                  className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition cursor-pointer flex items-center gap-1"
                 >
-                  <Play className="w-3 h-3 fill-current" />
-                  <span>{isEn ? 'Connect SSH' : 'اتصال به SSH'}</span>
+                  <Wifi className="w-3 h-3" />
+                  <span>{isEn ? 'Switch to Real SSH' : 'تغییر به SSH واقعی'}</span>
                 </button>
               )}
 
               <button
                 onClick={() => setTerminalOutput('')}
                 className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
-                title={isEn ? 'Clear Terminal' : 'پاک‌کردن ترمینال'}
+                title={isEn ? 'Clear Screen' : 'پاک‌کردن صفحه'}
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -480,7 +723,7 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
                 onClick={handleDownloadLog}
                 disabled={!terminalOutput}
                 className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer disabled:opacity-40"
-                title={isEn ? 'Download Session Log' : 'دانلود گزارش سشن'}
+                title={isEn ? 'Download Session Log' : 'دانلود لاگ سشن'}
               >
                 <Download className="w-3.5 h-3.5" />
               </button>
@@ -503,144 +746,228 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
             </div>
           </div>
 
-          {/* Connection Settings Toolbar (When not connected or toggled) */}
-          {connectionStatus !== 'ready' && (
-            <div className="px-4 py-2.5 bg-slate-900/90 border-b border-slate-800 grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
-              <div>
-                <label className="block text-[10px] text-slate-400 mb-0.5 font-medium">
-                  {isEn ? 'Host IP:' : 'آدرس IP:'}
-                </label>
-                <input
-                  type="text"
-                  value={host}
-                  onChange={(e) => setHost(e.target.value)}
-                  placeholder="192.168.1.1"
-                  className="w-full px-2.5 py-1 rounded bg-slate-950 border border-slate-700 text-slate-100 text-xs font-mono focus:border-indigo-500 focus:outline-none"
-                  dir="ltr"
-                />
+          {/* Credentials / Target Device Settings Drawer */}
+          {showCredsDrawer && (
+            <div className="px-4 py-3 bg-slate-900 border-b border-slate-800 space-y-2 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-semibold text-slate-200 flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>{isEn ? 'Target Appliance SSH Parameters' : 'تنظیمات احراز هویت و ارتباط SSH'}</span>
+                </span>
+                {saveCredsMessage && (
+                  <span className="text-emerald-400 text-[11px] font-medium animate-pulse">{saveCredsMessage}</span>
+                )}
               </div>
 
-              <div>
-                <label className="block text-[10px] text-slate-400 mb-0.5 font-medium">
-                  {isEn ? 'Port:' : 'پورت:'}
-                </label>
-                <input
-                  type="number"
-                  value={port}
-                  onChange={(e) => setPort(Number(e.target.value))}
-                  className="w-full px-2.5 py-1 rounded bg-slate-950 border border-slate-700 text-slate-100 text-xs font-mono focus:border-indigo-500 focus:outline-none"
-                  dir="ltr"
-                />
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                <div>
+                  <label className="block text-[10px] text-slate-400 mb-0.5 font-medium">
+                    {isEn ? 'IP Address:' : 'آدرس IP:'}
+                  </label>
+                  <input
+                    type="text"
+                    value={host}
+                    onChange={(e) => setHost(e.target.value)}
+                    placeholder="192.168.1.1"
+                    className="w-full px-2.5 py-1 rounded bg-slate-950 border border-slate-700 text-slate-100 text-xs font-mono focus:border-indigo-500 focus:outline-none"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] text-slate-400 mb-0.5 font-medium">
+                    {isEn ? 'Port:' : 'پورت:'}
+                  </label>
+                  <input
+                    type="number"
+                    value={port}
+                    onChange={(e) => setPort(Number(e.target.value))}
+                    className="w-full px-2.5 py-1 rounded bg-slate-950 border border-slate-700 text-slate-100 text-xs font-mono focus:border-indigo-500 focus:outline-none"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] text-slate-400 mb-0.5 font-medium">
+                    {isEn ? 'Username:' : 'نام کاربری:'}
+                  </label>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="admin"
+                    className="w-full px-2.5 py-1 rounded bg-slate-950 border border-slate-700 text-slate-100 text-xs font-mono focus:border-indigo-500 focus:outline-none"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div className="relative">
+                  <label className="block text-[10px] text-slate-400 mb-0.5 font-medium">
+                    {isEn ? 'Password:' : 'رمز عبور:'}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full px-2.5 py-1 pr-7 rounded bg-slate-950 border border-slate-700 text-slate-100 text-xs font-mono focus:border-indigo-500 focus:outline-none"
+                      dir="ltr"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-1.5 top-1.5 text-slate-400 hover:text-slate-200"
+                    >
+                      {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="relative">
+                  <label className="block text-[10px] text-slate-400 mb-0.5 font-medium">
+                    {isEn ? 'Enable Secret:' : 'رمز Enable سیسکو:'}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showEnablePassword ? 'text' : 'password'}
+                      value={enablePassword}
+                      onChange={(e) => setEnablePassword(e.target.value)}
+                      placeholder="cisco"
+                      className="w-full px-2.5 py-1 pr-7 rounded bg-slate-950 border border-slate-700 text-slate-100 text-xs font-mono focus:border-indigo-500 focus:outline-none"
+                      dir="ltr"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowEnablePassword(!showEnablePassword)}
+                      className="absolute right-1.5 top-1.5 text-slate-400 hover:text-slate-200"
+                    >
+                      {showEnablePassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-[10px] text-slate-400 mb-0.5 font-medium">
-                  {isEn ? 'Username:' : 'نام کاربری:'}
-                </label>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="admin"
-                  className="w-full px-2.5 py-1 rounded bg-slate-950 border border-slate-700 text-slate-100 text-xs font-mono focus:border-indigo-500 focus:outline-none"
-                  dir="ltr"
-                />
-              </div>
+              <div className="flex items-center justify-between pt-1 gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => connectWs()}
+                    disabled={connectionStatus === 'connecting'}
+                    className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition flex items-center gap-1 cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${connectionStatus === 'connecting' ? 'animate-spin' : ''}`} />
+                    <span>{isEn ? 'Reconnect with New Credentials' : 'اتصال مجدد با اطلاعات جدید'}</span>
+                  </button>
 
-              <div>
-                <label className="block text-[10px] text-slate-400 mb-0.5 font-medium">
-                  {isEn ? 'Password:' : 'رمز عبور:'}
-                </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full px-2.5 py-1 rounded bg-slate-950 border border-slate-700 text-slate-100 text-xs font-mono focus:border-indigo-500 focus:outline-none"
-                  dir="ltr"
-                />
-              </div>
+                  {device?.id && (
+                    <button
+                      type="button"
+                      onClick={handleSaveCredentials}
+                      disabled={isSavingCreds}
+                      className="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs border border-slate-700 transition flex items-center gap-1 cursor-pointer"
+                    >
+                      <Save className="w-3 h-3" />
+                      <span>{isSavingCreds ? (isEn ? 'Saving...' : 'در حال ذخیره...') : (isEn ? 'Save to Device Record' : 'ذخیره در پرونده دستگاه')}</span>
+                    </button>
+                  )}
+                </div>
 
-              <div>
-                <label className="block text-[10px] text-slate-400 mb-0.5 font-medium">
-                  {isEn ? 'Enable Secret:' : 'رمز Enable (سیسکو):'}
-                </label>
-                <input
-                  type="password"
-                  value={enablePassword}
-                  onChange={(e) => setEnablePassword(e.target.value)}
-                  placeholder="cisco"
-                  className="w-full px-2.5 py-1 rounded bg-slate-950 border border-slate-700 text-slate-100 text-xs font-mono focus:border-indigo-500 focus:outline-none"
-                  dir="ltr"
-                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTerminalEngine(terminalEngine === 'real_ssh' ? 'simulator' : 'real_ssh');
+                    if (terminalEngine === 'real_ssh') {
+                      disconnectWs();
+                      setTerminalOutput(
+                        `\r\n[SIMULATOR] Switched to Cisco IOS Offline Simulation CLI.\r\n${device?.name || 'Switch'}> `
+                      );
+                    }
+                  }}
+                  className="px-2.5 py-1 rounded bg-amber-950/60 hover:bg-amber-900/60 text-amber-300 border border-amber-700/40 text-xs transition cursor-pointer flex items-center gap-1"
+                >
+                  <Cpu className="w-3 h-3" />
+                  <span>
+                    {terminalEngine === 'real_ssh'
+                      ? (isEn ? 'Switch to Offline Simulator Mode' : 'تغییر به حالت شبیه‌ساز آفلاین')
+                      : (isEn ? 'Switch to Real SSH Hardware' : 'تغییر به SSH سخت‌افزار واقعی')}
+                  </span>
+                </button>
               </div>
             </div>
           )}
 
           {/* Quick Shortcuts & Pager Toolbar */}
-          <div className="flex flex-wrap items-center justify-between px-4 py-1.5 bg-slate-900/60 border-b border-slate-800 text-[11px] gap-2">
+          <div className="flex flex-wrap items-center justify-between px-4 py-1.5 bg-slate-900/80 border-b border-slate-800 text-[11px] gap-2">
             <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
               <span className="text-slate-400 shrink-0 font-medium">{isEn ? 'Quick Commands:' : 'دستورات سریع:'}</span>
               <button
                 type="button"
                 onClick={() => sendRawData('terminal length 0\r')}
-                disabled={connectionStatus !== 'ready'}
-                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 font-mono text-[10px] border border-cyan-500/30 transition cursor-pointer disabled:opacity-40 shrink-0"
+                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 font-mono text-[10px] border border-cyan-500/30 transition cursor-pointer shrink-0"
                 title={isEn ? 'Disable output pagination (terminal length 0)' : 'غیرفعال‌سازی صفحه‌بندی'}
               >
                 terminal length 0
               </button>
-              {enablePassword && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    sendRawData('enable\r');
+              <button
+                type="button"
+                onClick={() => {
+                  sendRawData('enable\r');
+                  if (enablePassword) {
                     setTimeout(() => sendRawData(enablePassword + '\r'), 500);
-                  }}
-                  disabled={connectionStatus !== 'ready'}
-                  className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 font-mono text-[10px] border border-amber-500/30 transition cursor-pointer disabled:opacity-40 shrink-0"
-                  title={isEn ? 'Enter Cisco Privileged EXEC mode' : 'ورود به حالت دسترسی ویژه Enable'}
-                >
-                  enable
-                </button>
-              )}
+                  }
+                }}
+                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 font-mono text-[10px] border border-amber-500/30 transition cursor-pointer shrink-0"
+                title={isEn ? 'Enter Cisco Privileged EXEC mode' : 'ورود به حالت دسترسی ویژه Enable'}
+              >
+                enable
+              </button>
               <button
                 type="button"
                 onClick={() => sendRawData('show version\r')}
-                disabled={connectionStatus !== 'ready'}
-                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-[10px] border border-slate-700 transition cursor-pointer disabled:opacity-40 shrink-0"
+                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-[10px] border border-slate-700 transition cursor-pointer shrink-0"
               >
                 show version
               </button>
               <button
                 type="button"
                 onClick={() => sendRawData('show ip interface brief\r')}
-                disabled={connectionStatus !== 'ready'}
-                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-[10px] border border-slate-700 transition cursor-pointer disabled:opacity-40 shrink-0"
+                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-[10px] border border-slate-700 transition cursor-pointer shrink-0"
               >
                 show ip int br
               </button>
               <button
                 type="button"
+                onClick={() => sendRawData('show interfaces status\r')}
+                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-[10px] border border-slate-700 transition cursor-pointer shrink-0"
+              >
+                show int status
+              </button>
+              <button
+                type="button"
+                onClick={() => sendRawData('show vlan brief\r')}
+                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-[10px] border border-slate-700 transition cursor-pointer shrink-0"
+              >
+                show vlan br
+              </button>
+              <button
+                type="button"
                 onClick={() => sendRawData('show cdp neighbors\r')}
-                disabled={connectionStatus !== 'ready'}
-                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-[10px] border border-slate-700 transition cursor-pointer disabled:opacity-40 shrink-0"
+                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-[10px] border border-slate-700 transition cursor-pointer shrink-0"
               >
                 show cdp nei
               </button>
               <button
                 type="button"
                 onClick={() => sendRawData('show running-config\r')}
-                disabled={connectionStatus !== 'ready'}
-                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-[10px] border border-slate-700 transition cursor-pointer disabled:opacity-40 shrink-0"
+                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-[10px] border border-slate-700 transition cursor-pointer shrink-0"
               >
                 show run
               </button>
               <button
                 type="button"
                 onClick={() => sendRawData('write memory\r')}
-                disabled={connectionStatus !== 'ready'}
-                className="px-2 py-0.5 rounded bg-emerald-950 hover:bg-emerald-900 text-emerald-300 font-mono text-[10px] border border-emerald-600/40 transition cursor-pointer disabled:opacity-40 shrink-0"
+                className="px-2 py-0.5 rounded bg-emerald-950 hover:bg-emerald-900 text-emerald-300 font-mono text-[10px] border border-emerald-600/40 transition cursor-pointer shrink-0"
               >
                 write mem
               </button>
@@ -682,6 +1009,13 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
                 </button>
                 <button
                   type="button"
+                  onClick={() => sendRawData('\r')}
+                  className="px-2 py-0.5 rounded bg-amber-800 hover:bg-amber-700 text-amber-100 font-semibold text-[10px] cursor-pointer"
+                >
+                  {isEn ? 'Next Line (Enter)' : 'خط بعد (Enter)'}
+                </button>
+                <button
+                  type="button"
                   onClick={() => sendRawData('terminal length 0\r')}
                   className="px-2 py-0.5 rounded bg-amber-700 hover:bg-amber-600 text-white font-semibold text-[10px] cursor-pointer"
                 >
@@ -691,50 +1025,158 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
             </div>
           )}
 
-          {/* Main Terminal Screen */}
-          <div
-            className="flex-1 p-4 overflow-y-auto font-mono text-xs text-slate-100 bg-slate-950 select-text leading-relaxed"
-            onClick={() => inputRef.current?.focus()}
-            dir="ltr"
-          >
-            {/* Session Welcome / Banner */}
-            <div className="text-slate-500 mb-3 select-none text-[11px] border-b border-slate-900 pb-2">
-              <div>NetTopology Enterprise Real SSH Terminal Engine (v1.11.0)</div>
-              <div>Connected via TCP Port 22 • Protocol: SSH-2.0 • Encryption: AES/CTR/GCM</div>
-              {banner && <div className="text-cyan-400 mt-1">{banner}</div>}
-            </div>
-
-            {/* Render Output Chunks */}
-            <div className="whitespace-pre-wrap break-all font-mono">
-              {terminalOutput ? (
-                parseAnsiToSpans(terminalOutput).map((span, idx) => (
-                  <span
-                    key={idx}
-                    className={`${span.color || 'text-slate-200'} ${span.bgColor || ''} ${
-                      span.bold ? 'font-bold' : ''
-                    } ${span.dim ? 'opacity-70' : ''} ${span.underline ? 'underline' : ''}`}
-                  >
-                    {span.text}
+          {/* Main Terminal Screen + Optional Guide Drawer */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* Terminal View */}
+            <div
+              className="flex-1 p-4 overflow-y-auto font-mono text-xs text-slate-100 bg-slate-950 select-text leading-relaxed flex flex-col"
+              onClick={() => inputRef.current?.focus()}
+              dir="ltr"
+            >
+              {/* Session Welcome / Banner */}
+              <div className="text-slate-500 mb-3 select-none text-[11px] border-b border-slate-900 pb-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-400">
+                    NetTopology Enterprise Cisco Hardware Terminal Engine (v1.12.0)
                   </span>
-                ))
-              ) : connectionStatus === 'ready' ? (
-                <span className="text-emerald-400">Terminal ready. Type a command or use shortcuts above...</span>
-              ) : (
-                <span className="text-slate-500">
-                  {isEn
-                    ? 'Click "Connect SSH" to establish an interactive session with the network appliance.'
-                    : 'برای برقراری ارتباط واقعی با سوییچ یا روتر، روی دکمه "اتصال به SSH" کلیک کنید.'}
-                </span>
-              )}
+                  <span className="text-[10px] text-slate-500">
+                    {terminalEngine === 'real_ssh' ? `TCP Port ${port} • Protocol: SSH-2.0` : 'Local Offline Sandbox'}
+                  </span>
+                </div>
+                <div>Target Appliance: {device?.name || host} • Model: {device?.model || 'Cisco Hardware'}</div>
+                {banner && <div className="text-cyan-400 mt-1">{banner}</div>}
+              </div>
+
+              {/* Render Output Chunks */}
+              <div className="whitespace-pre-wrap break-all font-mono flex-1">
+                {terminalOutput ? (
+                  parseAnsiToSpans(terminalOutput).map((span, idx) => (
+                    <span
+                      key={idx}
+                      className={`${span.color || 'text-slate-200'} ${span.bgColor || ''} ${
+                        span.bold ? 'font-bold' : ''
+                      } ${span.dim ? 'opacity-70' : ''} ${span.underline ? 'underline' : ''}`}
+                    >
+                      {span.text}
+                    </span>
+                  ))
+                ) : connectionStatus === 'ready' ? (
+                  <span className="text-emerald-400">
+                    Terminal ready. Connected directly to {device?.name || host}. Type a command or use shortcuts above...
+                  </span>
+                ) : connectionStatus === 'connecting' ? (
+                  <span className="text-amber-400">Establishing direct SSH connection to {host}:{port}...</span>
+                ) : (
+                  <span className="text-slate-500">
+                    {isEn
+                      ? 'Connecting to switch... Click "Connect SSH" or update credentials if needed.'
+                      : 'در حال ارتباط با سوییچ... در صورت نیاز اطلاعات احراز هویت را بررسی کنید.'}
+                  </span>
+                )}
+              </div>
+
+              <div ref={terminalEndRef} />
             </div>
 
-            <div ref={terminalEndRef} />
+            {/* Cisco Command Guide Drawer */}
+            {showGuideDrawer && (
+              <div
+                className="w-80 bg-slate-900 border-l border-slate-800 flex flex-col shrink-0 text-xs"
+                dir={isEn ? 'ltr' : 'rtl'}
+              >
+                <div className="p-3 border-b border-slate-800 flex items-center justify-between">
+                  <h4 className="font-bold text-white flex items-center gap-1.5">
+                    <BookOpen className="w-4 h-4 text-emerald-400" />
+                    <span>{isEn ? 'Cisco IOS Command Guide' : 'راهنمای دستورات سیسکو'}</span>
+                  </h4>
+                  <button
+                    onClick={() => setShowGuideDrawer(false)}
+                    className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Filter Pills & Search */}
+                <div className="p-2.5 border-b border-slate-800 space-y-2">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
+                    <input
+                      type="text"
+                      value={guideSearch}
+                      onChange={(e) => setGuideSearch(e.target.value)}
+                      placeholder={isEn ? 'Search Cisco commands...' : 'جستجوی دستورات سیسکو...'}
+                      className="w-full pl-8 pr-2.5 py-1 rounded bg-slate-950 border border-slate-700 text-slate-200 text-xs focus:outline-none focus:border-emerald-500"
+                      dir="ltr"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1 overflow-x-auto text-[10px]">
+                    {(['all', 'show', 'config', 'exec', 'vlan'] as const).map((cat) => (
+                      <button
+                        key={cat}
+                        onClick={() => setGuideCategory(cat)}
+                        className={`px-2 py-0.5 rounded font-medium transition capitalize cursor-pointer ${
+                          guideCategory === cat
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Commands List */}
+                <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                  {filteredGuide.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 hover:border-slate-700 transition"
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <code className="text-emerald-400 font-mono text-[11px] font-bold" dir="ltr">
+                          {item.cmd}
+                        </code>
+                        <span className="px-1.5 py-0.2 rounded text-[9px] bg-slate-800 text-slate-400 uppercase">
+                          {item.category}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 mb-2 leading-relaxed">
+                        {isEn ? item.descEn : item.descFa}
+                      </p>
+                      <div className="flex items-center gap-1.5" dir="ltr">
+                        <button
+                          type="button"
+                          onClick={() => handleSendCommand(item.cmd)}
+                          className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-semibold flex items-center gap-1 cursor-pointer"
+                        >
+                          <Play className="w-2.5 h-2.5 fill-current" />
+                          <span>{isEn ? 'Run Now' : 'اجرا'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCurrentInput(item.cmd);
+                            inputRef.current?.focus();
+                          }}
+                          className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] cursor-pointer"
+                        >
+                          {isEn ? 'Insert' : 'درج در خط فرمان'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Command Prompt Input Bar */}
           <div className="px-4 py-2.5 bg-slate-900 border-t border-slate-800 flex items-center gap-2 shrink-0">
             <div className="text-emerald-400 font-mono text-xs font-bold flex items-center gap-1 select-none">
-              <span>{host || 'device'}</span>
+              <span>{device?.name || host || 'Switch'}</span>
               <span className="text-slate-400">&gt;</span>
             </div>
 
@@ -744,17 +1186,16 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
               value={currentInput}
               onChange={(e) => setCurrentInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={connectionStatus !== 'ready'}
               placeholder={
-                connectionStatus === 'ready'
+                terminalEngine === 'real_ssh' && connectionStatus !== 'ready'
                   ? isEn
-                    ? 'Enter Cisco command (e.g. show version)...'
-                    : 'دستور شبکه را وارد کنید (مثلاً: show version)...'
+                    ? 'Connecting to hardware...'
+                    : 'در حال اتصال به سوئیچ...'
                   : isEn
-                  ? 'Connect to device to start typing...'
-                  : 'ابتدا به تجهیز متصل شوید...'
+                  ? 'Enter Cisco command (e.g. show version, show run)...'
+                  : 'دستور سیسکو را وارد کنید (مثلاً show version یا show run)...'
               }
-              className="flex-1 bg-transparent text-slate-100 font-mono text-xs focus:outline-none disabled:opacity-50 placeholder-slate-600"
+              className="flex-1 bg-transparent text-slate-100 font-mono text-xs focus:outline-none placeholder-slate-600"
               dir="ltr"
               autoComplete="off"
               spellCheck={false}
@@ -764,8 +1205,7 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
               <button
                 type="button"
                 onClick={() => handleSendCommand()}
-                disabled={connectionStatus !== 'ready'}
-                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer disabled:opacity-40"
+                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
               >
                 <span>{isEn ? 'Send' : 'ارسال'}</span>
                 <CornerDownLeft className="w-3.5 h-3.5" />

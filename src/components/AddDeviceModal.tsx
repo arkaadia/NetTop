@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { X, Network, Server, Wifi, Router as RouterIcon, ShieldCheck, MapPin, FileCode2, Activity, CheckCircle2, XCircle, RefreshCw, Terminal, Eye, EyeOff, Key, Play, ShieldAlert, Sparkles, Radio } from 'lucide-react';
-import { Device, DeviceType, ConfigTemplate, DeviceConnectionTestResult, RealSshTestResult } from '../types';
-import { fetchTemplates, testRawIpConnection, testRealSsh } from '../services/api';
+import { Device, DeviceType, ConfigTemplate, DeviceConnectionTestResult, RealSshTestResult, SwitchPort, RealSwitchDiscoveryResult } from '../types';
+import { fetchTemplates, testRawIpConnection, testRealSsh, discoverRealSwitch } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
 import { RealSshTerminalModal } from './RealSshTerminalModal';
 
 interface AddDeviceModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAdd: (device: Partial<Device>) => Promise<Device | void>;
+  onAdd: (device: Partial<Device> & { ports?: SwitchPort[] }) => Promise<Device | void>;
   onDeviceCreatedWithTemplate?: (device: Device, templateId: string) => void;
 }
 
@@ -40,12 +40,65 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
   const [templates, setTemplates] = useState<ConfigTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittingStatus, setSubmittingStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isTestingIp, setIsTestingIp] = useState(false);
   const [ipTestResult, setIpTestResult] = useState<DeviceConnectionTestResult | null>(null);
   const [isTestingSsh, setIsTestingSsh] = useState(false);
   const [sshTestResult, setSshTestResult] = useState<RealSshTestResult | null>(null);
   const [isSshTerminalOpen, setIsSshTerminalOpen] = useState(false);
+
+  // Live Switch Hardware & Port Discovery State
+  const [isDiscovering, setIsDiscovering] = useState(false);
+  const [discoveryResult, setDiscoveryResult] = useState<RealSwitchDiscoveryResult | null>(null);
+  const [discoveredPorts, setDiscoveredPorts] = useState<SwitchPort[]>([]);
+  const [autoDiscoverOnAdd, setAutoDiscoverOnAdd] = useState(true);
+
+  const handleDiscoverSwitch = async () => {
+    if (!ip.trim()) {
+      setError(isEn ? 'Please enter switch IP address first' : 'لطفاً ابتدا آدرس IP سوئیچ را وارد کنید');
+      return;
+    }
+    if (!sshUsername.trim()) {
+      setError(isEn ? 'Please enter SSH username' : 'لطفاً نام کاربری SSH را وارد کنید');
+      return;
+    }
+    setError(null);
+    setIsDiscovering(true);
+    setDiscoveryResult(null);
+
+    try {
+      const res = await discoverRealSwitch({
+        host: ip.trim(),
+        port: Number(sshPort) || 22,
+        username: sshUsername.trim(),
+        password: sshPassword,
+        enablePassword: enablePassword,
+        timeoutMs: 20000,
+      });
+
+      setDiscoveryResult(res);
+
+      if (res.success && res.data) {
+        const { device: devInfo, ports } = res.data;
+        if (devInfo.model) setModel(devInfo.model);
+        if (ports && ports.length > 0) {
+          setTotalPorts(ports.length);
+          setDiscoveredPorts(ports);
+        }
+        if (devInfo.hostname && (!name || name === 'New-Switch' || name === 'Switch')) {
+          setName(devInfo.hostname);
+        }
+      }
+    } catch (err: any) {
+      setDiscoveryResult({
+        success: false,
+        message: err.message || (isEn ? 'Failed to discover switch' : 'خطا در برقراری ارتباط و دریافت اطلاعات سوئیچ')
+      });
+    } finally {
+      setIsDiscovering(false);
+    }
+  };
 
   const handleTestRealSsh = async () => {
     if (!ip.trim()) {
@@ -130,17 +183,65 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
     try {
       setIsSubmitting(true);
       setError(null);
+
+      let finalPorts = discoveredPorts;
+      let finalModel = model.trim();
+      let finalTotalPorts = Number(totalPorts);
+      let finalFirmware: string | undefined = undefined;
+      let finalUptime: string | undefined = undefined;
+      let finalMac: string | undefined = undefined;
+      let finalSerial: string | undefined = undefined;
+
+      // If user hasn't manually clicked discovery yet, but auto-discovery is enabled for switch
+      if (type === 'switch' && finalPorts.length === 0 && autoDiscoverOnAdd && ip.trim() && sshUsername.trim()) {
+        setSubmittingStatus(isEn ? 'Connecting to switch via SSH to extract real ports & specs...' : 'در حال اتصال به سوئیچ با SSH جهت استخراج پورت‌ها و مشخصات واقعی...');
+        try {
+          const disc = await discoverRealSwitch({
+            host: ip.trim(),
+            port: Number(sshPort) || 22,
+            username: sshUsername.trim(),
+            password: sshPassword,
+            enablePassword: enablePassword,
+            timeoutMs: 7000,
+          });
+          if (disc.success && disc.data) {
+            if (disc.data.ports && disc.data.ports.length > 0) {
+              finalPorts = disc.data.ports;
+              finalTotalPorts = disc.data.ports.length;
+            }
+            if (disc.data.device.model) finalModel = disc.data.device.model;
+            finalFirmware = disc.data.device.firmware;
+            finalUptime = disc.data.device.uptime;
+            finalMac = disc.data.device.mac;
+            finalSerial = disc.data.device.serial;
+          }
+        } catch (discErr) {
+          console.warn('[AddDeviceModal] Auto-discovery warning (proceeding with manual specs):', discErr);
+        }
+      } else if (discoveryResult?.data) {
+        if (discoveryResult.data.device.model) finalModel = discoveryResult.data.device.model;
+        finalFirmware = discoveryResult.data.device.firmware;
+        finalUptime = discoveryResult.data.device.uptime;
+        finalMac = discoveryResult.data.device.mac;
+        finalSerial = discoveryResult.data.device.serial;
+        if (finalPorts.length > 0) {
+          finalTotalPorts = finalPorts.length;
+        }
+      }
+
+      setSubmittingStatus(isEn ? 'Saving device & ports...' : 'در حال ذخیره تجهیز و پورت‌ها...');
+
       const created = await onAdd({
         name: name.trim(),
         ip: ip.trim(),
         type,
         role,
-        model: model.trim(),
+        model: finalModel,
         building: building.trim(),
         floor: floor.trim(),
         unit: unit.trim(),
         rack: rack.trim(),
-        total_ports: Number(totalPorts),
+        total_ports: finalTotalPorts,
         cdp_enabled: cdpEnabled,
         lldp_enabled: lldpEnabled,
         snmp_community: snmpCommunity.trim(),
@@ -148,6 +249,11 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
         ssh_username: sshUsername.trim() || 'admin',
         ssh_password: sshPassword,
         enable_password: enablePassword,
+        firmware: finalFirmware,
+        uptime: finalUptime,
+        mac: finalMac,
+        serial: finalSerial,
+        ports: finalPorts.length > 0 ? finalPorts : undefined,
       });
       onClose();
 
@@ -457,47 +563,132 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                 </div>
               </div>
 
-              {/* SSH Real Connection Testing & Interactive Terminal Action Bar */}
-              <div className="pt-2 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleTestRealSsh}
-                    disabled={isTestingSsh || !ip.trim()}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-semibold transition cursor-pointer disabled:opacity-50"
-                  >
-                    {isTestingSsh ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        <span>{isEn ? 'Connecting Port 22...' : 'در حال تست پورت ۲۲...'}</span>
-                      </>
-                    ) : (
-                      <>
-                        <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>{isEn ? 'Test Real SSH Connection' : 'تست اتصال واقعی و احراز هویت SSH'}</span>
-                      </>
-                    )}
-                  </button>
+              {/* SSH Real Connection Testing, Discovery & Interactive Terminal Action Bar */}
+              <div className="pt-2 border-t border-slate-200/80 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleDiscoverSwitch}
+                      disabled={isDiscovering || !ip.trim()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-xs transition cursor-pointer disabled:opacity-50"
+                      title={isEn ? 'Connect to switch via SSH, run show commands, and extract real model and physical ports' : 'اتصال مستقیم به سوئیچ با SSH، اجرای دستورات سیسکو و استخراج مدل و پورت‌های فیزیکی واقعی'}
+                    >
+                      {isDiscovering ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>{isEn ? 'Discovering Switch Ports...' : 'در حال دریافت پورت‌های واقعی...'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5 text-emerald-200" />
+                          <span>{isEn ? 'Fetch Real Ports from Switch (SSH)' : 'دریافت مشخصات و پورت‌های واقعی از سوئیچ'}</span>
+                        </>
+                      )}
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!ip.trim()) {
-                        setError(isEn ? 'Please enter IP address first' : 'لطفاً ابتدا آدرس IP را وارد کنید');
-                        return;
-                      }
-                      setIsSshTerminalOpen(true);
-                    }}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-slate-700 text-xs font-semibold shadow-xs transition cursor-pointer"
-                  >
-                    <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>{isEn ? 'Open Live SSH Terminal' : 'ورود مستقیم به ترمینال تعاملی SSH'}</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={handleTestRealSsh}
+                      disabled={isTestingSsh || !ip.trim()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-semibold transition cursor-pointer disabled:opacity-50"
+                    >
+                      {isTestingSsh ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>{isEn ? 'Connecting Port 22...' : 'در حال تست پورت ۲۲...'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>{isEn ? 'Test SSH Auth' : 'تست احراز هویت SSH'}</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!ip.trim()) {
+                          setError(isEn ? 'Please enter IP address first' : 'لطفاً ابتدا آدرس IP را وارد کنید');
+                          return;
+                        }
+                        setIsSshTerminalOpen(true);
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-slate-700 text-xs font-semibold shadow-xs transition cursor-pointer"
+                    >
+                      <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>{isEn ? 'Cisco CLI Terminal' : 'ترمینال CLI سیسکو'}</span>
+                    </button>
+                  </div>
+
+                  <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-600 select-none">
+                    <input
+                      type="checkbox"
+                      checked={autoDiscoverOnAdd}
+                      onChange={(e) => setAutoDiscoverOnAdd(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded text-emerald-600 focus:ring-emerald-500 bg-white border-slate-300"
+                    />
+                    <span>{isEn ? 'Auto-sync real ports on save' : 'استخراج خودکار پورت‌های واقعی در زمان ثبت'}</span>
+                  </label>
                 </div>
 
-                <span className="text-[11px] text-slate-500">
-                  {isEn ? 'Direct WebSocket to switch CLI' : 'اتصال مستقیم وب‌سوکت به CLI سوییچ'}
-                </span>
+                {/* Switch Discovery Result Display */}
+                {discoveryResult && (
+                  <div
+                    className={`p-3 rounded-xl text-xs border ${
+                      discoveryResult.success
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                        : 'bg-rose-50 border-rose-200 text-rose-800'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2">
+                      {discoveryResult.success ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                      )}
+                      <div className="flex-1 space-y-1">
+                        <div className="font-bold flex items-center justify-between">
+                          <span>{discoveryResult.message}</span>
+                          {discoveredPorts.length > 0 && (
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 font-bold text-[10px]">
+                              {discoveredPorts.length} {isEn ? 'Real Ports Discovered' : 'پورت فیزیکی واقعی'}
+                            </span>
+                          )}
+                        </div>
+                        {discoveryResult.data?.device && (
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1.5 text-[11px] font-mono border-t border-emerald-200/60 text-slate-700">
+                            {discoveryResult.data.device.model && (
+                              <div>
+                                <span className="text-slate-400 block text-[9px]">{isEn ? 'Model:' : 'مدل سخت‌افزار:'}</span>
+                                <span className="font-semibold">{discoveryResult.data.device.model}</span>
+                              </div>
+                            )}
+                            {discoveryResult.data.device.firmware && (
+                              <div>
+                                <span className="text-slate-400 block text-[9px]">{isEn ? 'IOS Software:' : 'نسخه IOS:'}</span>
+                                <span className="font-semibold truncate block">{discoveryResult.data.device.firmware}</span>
+                              </div>
+                            )}
+                            {discoveryResult.data.device.serial && (
+                              <div>
+                                <span className="text-slate-400 block text-[9px]">{isEn ? 'Serial:' : 'شماره سریال:'}</span>
+                                <span className="font-semibold">{discoveryResult.data.device.serial}</span>
+                              </div>
+                            )}
+                            {discoveryResult.data.device.uptime && (
+                              <div>
+                                <span className="text-slate-400 block text-[9px]">{isEn ? 'Uptime:' : 'زمان روشن بودن:'}</span>
+                                <span className="font-semibold">{discoveryResult.data.device.uptime}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* SSH Test Result Display */}
@@ -656,21 +847,31 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
           </div>
 
           {/* Form Actions (Pinned Footer) */}
-          <div className="flex items-center justify-end gap-2.5 px-5 py-3 border-t border-slate-200 bg-slate-50 shrink-0">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-medium transition"
-            >
-              {t('action_cancel')}
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-sm transition disabled:opacity-50"
-            >
-              {isSubmitting ? t('add_device_btn_saving') : t('add_device_btn_submit')}
-            </button>
+          <div className="flex items-center justify-between gap-2.5 px-5 py-3 border-t border-slate-200 bg-slate-50 shrink-0">
+            <div className="text-xs text-indigo-700 font-medium flex items-center gap-2">
+              {isSubmitting && (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>{submittingStatus || t('add_device_btn_saving')}</span>
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-medium transition"
+              >
+                {t('action_cancel')}
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-sm transition disabled:opacity-50"
+              >
+                {isSubmitting ? (submittingStatus ? (isEn ? 'Saving...' : 'در حال ذخیره...') : t('add_device_btn_saving')) : t('add_device_btn_submit')}
+              </button>
+            </div>
           </div>
         </form>
       </div>

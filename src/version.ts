@@ -10,9 +10,55 @@ export interface ReleaseNote {
   changes_en?: string[];
 }
 
-export const APP_VERSION = '1.11.0';
+export const APP_VERSION = '1.13.0';
 
 export const RELEASE_HISTORY: ReleaseNote[] = [
+  {
+    version: '1.13.0',
+    releaseDate: '2026-09-12',
+    type: 'minor',
+    title: 'استخراج خودکار پورت‌های واقعی و مشخصات سخت‌افزاری سوئیچ سیسکو با SSH، همگام‌سازی لایو و ارتقای ترمینال CLI',
+    title_en: 'Real Hardware Port Auto-Discovery & Live SSH Sync for Cisco Switches, Port Verification & CLI Terminal Enhancements',
+    changes: [
+      'پیاده‌سازی موتور استخراج خودکار پورت‌های واقعی فیزیکی از طریق اجرای دستورات show ip interface brief و show interfaces status روی سوئیچ‌های سیسکو بدون ایجاد پورت ماک یا ساختگی',
+      'افزودن دکمه «استخراج پورت‌های واقعی با SSH» و چک‌باکس همگام‌سازی خودکار در زمان افزودن تجهیز جدید (Add Device Modal)',
+      'افزودن دکمه «همگام‌سازی پورت‌های واقعی (Sync Real Ports)» در هدر بازرس پورت (Port Inspector) جهت به‌روزرسانی لحظه‌ای شاسی و تمام پورت‌های فیزیکی از سخت‌افزار زنده',
+      'استخراج دقیق مدل سخت‌افزاری، شماره سریال (Serial Number)، فریم‌ور و زمان کارکرد (Uptime) و ثبت مستقیم در پایگاه داده تجهیزات',
+      'پشتیبانی از احراز هویت کیبورد اینتراکتیو (Keyboard-Interactive) در کلاینت SSH جهت سازگاری ۱۰۰٪ با تجهیزات قدیمی و مدرن سیسکو',
+      'ارتقای لایه مودال ترمینال سیسکو (z-[70]) و باز شدن خودکار دراور مشخصات احراز هویت در صورت عدم وجود پسورد برای اتصال سریع و آسان'
+    ],
+    changes_en: [
+      'Real physical hardware port auto-discovery engine parsing live "show ip interface brief" and "show interfaces status" from Cisco switches without mock data',
+      'Added "Fetch Real Ports (SSH)" button and auto-sync toggle when registering new switches in the Add Device modal',
+      'Added "Sync Real Ports (SSH)" action button in Port Inspector modal to re-sync physical switch faceplate ports on demand directly from hardware',
+      'Extracted accurate hardware model, serial number, firmware, and uptime from live switch into inventory records',
+      'Added keyboard-interactive SSH authentication handling for complete compatibility with Cisco IOS/IOS-XE appliances',
+      'Elevated Cisco Terminal modal layering (z-[70]) with automatic credentials drawer presentation when password is required'
+    ]
+  },
+  {
+    version: '1.12.0',
+    releaseDate: '2026-09-12',
+    type: 'minor',
+    title: 'اتصال مستقیم دکمه Cisco Terminal به SSH سخت‌افزار واقعی، ورود خودکار به سوئیچ، راهنمای دستورات سیسکو و ذخیره مشخصات احراز هویت',
+    title_en: 'Direct Cisco Terminal Header Button Integration to Real Hardware SSH, Auto-Connect Switch Shell, Cisco IOS Command Reference Guide & Credential Persistence',
+    changes: [
+      'یکپارچه‌سازی مستقیم دکمه Cisco Terminal در هدر Port Inspector با ترمینال SSH واقعی بدون واسطه شبیه‌ساز ماک',
+      'ورود مستقیم و خودکار (Auto-Connect) به سوییچ با باز شدن ترمینال بر روی پورت ۲۲ از طریق وب‌سوکت /ws/ssh',
+      'پنل کشویی اختصاصی راهنمای جامع دستورات سیسکو (Cisco Command Guide) با دسته‌بندی‌های Show، Config، Exec و VLAN و دکمه‌های اجرای مستقیم و درج در خط فرمان',
+      'امکان ذخیره دائمی مشخصات احراز هویت (نام کاربری، پسورد، پورت و Enable Secret) بر روی پرونده تجهیز با دکمه Save to Device',
+      'قابلیت سوئیچ سریع میان حالت سخت‌افزاری واقعی (Real SSH) و شبیه‌ساز آفلاین در مواقع عدم دسترسی فیزیکی به شبکه سوئیچ',
+      'ارتقای لایه z-index به z-[60] برای قرارگیری تمیز ترمینال بر روی پنجره Port Inspector با افکت بلور دارک شیشه‌ای'
+    ],
+    changes_en: [
+      'Direct integration of the Port Inspector header Cisco Terminal button to the Real SSH hardware terminal with zero mock intermediaries',
+      'Instant Auto-Connect entering the switch directly upon modal launch via WebSocket gateway (/ws/ssh) over TCP Port 22',
+      'Dedicated expandable Cisco IOS Command Guide drawer featuring categorized commands (Show, Config, Exec, VLAN) with instant Run and Insert actions',
+      'One-click credential persistence (username, password, SSH port, enable secret) directly into device records via updateDevice API',
+      'Seamless toggle between Real Hardware SSH mode and Offline Simulator mode when testing away from the physical appliance network',
+      'Elevated z-index stacking (z-[60]) providing crystal-clear modal overlay above the Port Inspector with deep backdrop glassmorphism'
+    ]
+  },
   {
     version: '1.11.0',
     releaseDate: '2026-09-11',

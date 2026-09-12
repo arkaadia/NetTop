@@ -10,6 +10,7 @@ import { TemplateManagementView } from './components/TemplateManagementView';
 import { AddDeviceModal } from './components/AddDeviceModal';
 import { PortInspectorModal } from './components/PortInspectorModal';
 import { CiscoTerminalModal } from './components/CiscoTerminalModal';
+import { RealSshTerminalModal } from './components/RealSshTerminalModal';
 import { ApplyTemplateModal } from './components/ApplyTemplateModal';
 import { ReleaseNotesModal } from './components/ReleaseNotesModal';
 import { APP_VERSION } from './version';
@@ -448,11 +449,17 @@ export default function App() {
         onWriteMemory={handleWriteMemory}
       />
 
-      {/* Cisco Terminal Modal */}
-      <CiscoTerminalModal
+      {/* Cisco Real SSH Hardware Terminal Modal (Port 22 with WebSocket Gateway) */}
+      <RealSshTerminalModal
         device={terminalDevice}
         isOpen={!!terminalDevice}
         onClose={() => setTerminalDevice(null)}
+        initialHost={terminalDevice?.ip}
+        initialPort={terminalDevice?.ssh_port || 22}
+        initialUsername={terminalDevice?.ssh_username || 'admin'}
+        initialPassword={terminalDevice?.ssh_password || ''}
+        initialEnablePassword={terminalDevice?.enable_password || ''}
+        autoConnect={true}
         onDeviceUpdated={loadData}
       />
 
