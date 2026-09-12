@@ -1,11 +1,11 @@
 # NetTopology 🌐
 
-[![Version](https://img.shields.io/badge/version-1.13.0-blue.svg)](https://github.com/shahbazimasoud/NetTopology)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/shahbazimasoud/NetTopology)
+[![Version](https://img.shields.io/badge/version-1.13.1-blue.svg)](https://github.com/arkaadia/NetTop)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/arkaadia/NetTop)
 [![Node](https://img.shields.io/badge/node-20%2B%20%7C%2022%20LTS-brightgreen.svg)](https://nodejs.org)
 
-سامانه جامع مدیریت، مانیتورینگ توپولوژی شبکه و مدیریت تجهیزات سیسکو (سویچ، روتر و فایروال) - نسخه ۱.۱۳.۰
-A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Configuration Platform - Version 1.13.0
+سامانه جامع مدیریت، مانیتورینگ توپولوژی شبکه و مدیریت تجهیزات سیسکو (سویچ، روتر و فایروال) - نسخه ۱.۱۳.۱
+A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Configuration Platform - Version 1.13.1
 
 ---
 
@@ -160,8 +160,13 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
 ## راهنمای نصب و راه‌اندازی
 
 ### ۱. نصب خودکار روی سرور و لینوکس با یک دستور (پیشنهادی / One-Liner Setup)
-دقیقاً مشابه سیستم Matrix Stack Manager، می‌توانید این سامانه را با یک خط دستور به صورت خودکار، کامل و بی‌نقص روی سرورهای ابری، VPS یا ماشین‌های لینوکسی (Ubuntu 20.04/22.04/24.04 یا Debian 11/12) نصب و پیکربندی کنید:
+می‌توانید این سامانه را با یک خط دستور به صورت کاملاً خودکار روی سرورهای ابری، VPS یا ماشین‌های لینوکسی (Ubuntu 20.04/22.04/24.04 یا Debian 11/12) نصب و پیکربندی کنید:
 
+```bash
+curl -sSL https://raw.githubusercontent.com/arkaadia/NetTop/master/setup-panel.sh | sudo bash
+```
+
+یا در صورت بروز مشکل در دسترسی به گیت‌هاب:
 ```bash
 curl -sSL https://raw.githubusercontent.com/shahbazimasoud/NetTopology/master/setup-panel.sh | sudo bash
 ```
@@ -171,7 +176,7 @@ curl -sSL https://raw.githubusercontent.com/shahbazimasoud/NetTopology/master/se
   - دریافت پورت فرانت‌اند (رابط وب و داشبورد مدیریتی - پیش‌فرض: `3000`).
   - دریافت پورت بک‌اند (موتور پایتون سیسکو و اندپوینت‌های API - پیش‌فرض: `5001`).
   - بررسی عدم تداخل پورت‌ها و برقراری ارتباط خودکار دوطرفه از طریق Reverse-Proxy داخلی اکسپرس (تمامی درخواست‌های `/api/*` از پورت فرانت‌اند به پورت بک‌اند فوروارد می‌شوند تا در مرورگر کاربر هیچ‌گونه خطای CORS یا تداخل پورتی پیش نیاید).
-- بررسی و نصب خودکار وابستگی‌های سیستمی (`curl`, `git`, `python3`, `openssl`, `build-essential`, `ufw`).
+- بررسی و نصب خودکار وابستگی‌های سیستمی (`curl`, `git`, `python3`, `openssl`, `build-essential`, `ufw`, `nginx`).
 - شناسایی هوشمند یا دانلود و نصب باینری نسخه رسمی `Node.js 22 LTS`.
 - دریافت کدهای پروژه از GitHub با مکانیزم‌های آینه (Proxy Mirror) و بک‌آپ ZIP در صورت وجود اختلال اینترنت.
 - بازیابی خودکار دیتابیس توپولوژی و کانفیگ‌ها در صورت نصب مجدد (`/etc/nettopology-backup`).
@@ -185,7 +190,7 @@ curl -sSL https://raw.githubusercontent.com/shahbazimasoud/NetTopology/master/se
 ### ۲. حذف کامل یا پاک‌سازی پنل (Uninstaller)
 برای حذف کامل پنل به همراه بک‌آپ‌گیری امن از داده‌های شبکه:
 ```bash
-curl -sSL https://raw.githubusercontent.com/shahbazimasoud/NetTopology/master/uninstall-panel.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/arkaadia/NetTop/master/uninstall-panel.sh | sudo bash
 ```
 
 ---
@@ -193,10 +198,12 @@ curl -sSL https://raw.githubusercontent.com/shahbazimasoud/NetTopology/master/un
 ### ۳. نصب دستی از طریق سورس‌کد
 ```bash
 # کلون کردن ریپازیتوری
-git clone https://github.com/shahbazimasoud/NetTopology.git
-cd NetTopology
+git clone https://github.com/arkaadia/NetTop.git
+cd NetTop
 
-# اجرای اسکریپت راه‌اندازی محلی
+# اجرای اسکریپت نصب کامل به همراه Nginx و SSL:
+sudo bash install.sh
+# یا اجرای اسکریپت جامع ستاپ:
 sudo bash setup-panel.sh
 # یا راه‌اندازی اختصاصی اتصال مستقیم سخت‌افزاری SSH به سوییچ‌ها:
 chmod +x run-local-ssh.sh
@@ -248,6 +255,18 @@ npm start
 > ۳. **گیت و کامیت خودکار**: تمامی تغییرات باید خودکار همراه با پیام توصیفی دوزبانه روی برنچ `master` مخزن گیت‌هاب کامیت و پوش شوند. جزئیات بیشتر در فایل `AGENTS.md` درج شده است.
 
 ### تاریخچه نسخه‌ها و رفع مشکلات (Release Notes & Troubleshooting)
+- **نسخه ۱.۱۳.۱ (v1.13.1 - بهینه‌سازی نصاب خودکار لینوکس و تنظیم مخزن Git)**:
+  - **اسکریپت One-Liner بهینه‌شده:** بهینه‌سازی اسکریپت `setup-panel.sh` و `install.sh` برای نصب مستقیم روی انواع توزیع‌های لینوکس اوبونتو، دبیان، راکی و CentOS.
+  - **پشتیبانی از مخزن جدید `arkaadia/NetTop`:** افزودن خودکار آدرس مخزن جدید به عنوان مبدا پیش‌فرض با قابلیت Fallback به مخزن کمکی و فایل ZIP در صورت محدودیت شبکه.
+  - **پیکربندی خودکار SSL و پروکسی Nginx:** صدور گواهی امنیتی ۱۰ ساله Self-Signed TLS، ایزولاسیون کامل پورت‌های داخلی روی 127.0.0.1 و ساخت سرویس دائم Systemd.
+
+- **نسخه ۱.۱۳.۰ (v1.13.0 - استخراج خودکار پورت‌های واقعی سوئیچ سیسکو با SSH و رفع اتصال ترمینال)**:
+  - **استخراج و کشف خودکار پورت‌های سخت‌افزاری:** اجرای خودکار فرامین `show ip interface brief` و `show interfaces status` جهت خواندن اینترفیس‌های فیزیکی واقعی و وضعیت لینک‌ها بدون داده‌های ماک.
+  - **دکمه استخراج در فرم ثبت تجهیز:** افزودن دکمه «استخراج پورت‌های واقعی با SSH» در Add Device Modal و چک‌باکس استخراج خودکار هنگام ثبت سوئیچ.
+  - **دکمه همگام‌سازی لحظه‌ای در بازرس پورت (Sync Real Ports):** بازخوانی سریع پورت‌ها مستقیماً از سخت‌افزار واقعی سوئیچ سیسکو در هر زمان.
+  - **استخراج شماره سریال (Serial Number) و مدل سخت‌افزاری:** خواندن شماره سریال و اطلاعات شاسی و ذخیره دائمی آن.
+  - **ارتقای ترمینال CLI:** باز شدن خودکار دراور مشخصات لاگین در صورت نیاز به پسورد و پشتیبانی از احراز هویت Keyboard-Interactive.
+
 - **نسخه ۱.۱۲.۰ (v1.12.0 - اتصال مستقیم دکمه Cisco Terminal به SSH سخت‌افزار واقعی، ورود خودکار به سوئیچ، راهنمای جامع دستورات سیسکو و ذخیره مشخصات احراز هویت)**:
   - **یکپارچه‌سازی مستقیم دکمه Cisco Terminal:** اتصال کلید ترمینال در هدر مودال بازرسی پورت (`PortInspectorModal`) و تمامی بخش‌های برنامه به ترمینال SSH واقعی روی پورت ۲۲ بدون واسطه شبیه‌ساز ماک.
   - **ورود مستقیم و خودکار به سوئیچ (Instant Auto-Connect):** با کلیک بر روی دکمه، اتصال وب‌سوکت `/ws/ssh` به صورت فوری برقرار شده و کاربر مستقیماً وارد محیط خط فرمان سوییچ مربوطه می‌شود.
@@ -456,8 +475,13 @@ npm start
 ## Installation & Setup
 
 ### 1. Automated VPS / Server Deployment (Recommended One-Liner)
-Just like Matrix Stack Manager, you can deploy NetTopology to any Ubuntu 20.04/22.04/24.04 or Debian 11/12 VPS/Dedicated server with a single terminal command:
+You can deploy NetTopology to any Ubuntu 20.04/22.04/24.04 or Debian 11/12 VPS/Dedicated server with a single terminal command:
 
+```bash
+curl -sSL https://raw.githubusercontent.com/arkaadia/NetTop/master/setup-panel.sh | sudo bash
+```
+
+Or using the fallback mirror:
 ```bash
 curl -sSL https://raw.githubusercontent.com/shahbazimasoud/NetTopology/master/setup-panel.sh | sudo bash
 ```
@@ -480,7 +504,7 @@ curl -sSL https://raw.githubusercontent.com/shahbazimasoud/NetTopology/master/se
 ### 2. Complete Uninstallation & Cleanup
 To cleanly remove NetTopology while safeguarding database backups:
 ```bash
-curl -sSL https://raw.githubusercontent.com/shahbazimasoud/NetTopology/master/uninstall-panel.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/arkaadia/NetTop/master/uninstall-panel.sh | sudo bash
 ```
 
 ---
@@ -488,10 +512,12 @@ curl -sSL https://raw.githubusercontent.com/shahbazimasoud/NetTopology/master/un
 ### 3. Manual Local Installation
 ```bash
 # Clone the repository
-git clone https://github.com/shahbazimasoud/NetTopology.git
-cd NetTopology
+git clone https://github.com/arkaadia/NetTop.git
+cd NetTop
 
-# Run automated local setup:
+# Run comprehensive install with Nginx and SSL:
+sudo bash install.sh
+# Or run automated setup:
 sudo bash setup-panel.sh
 
 # Or start dedicated real hardware SSH runner:

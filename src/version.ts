@@ -10,9 +10,26 @@ export interface ReleaseNote {
   changes_en?: string[];
 }
 
-export const APP_VERSION = '1.13.0';
+export const APP_VERSION = '1.13.1';
 
 export const RELEASE_HISTORY: ReleaseNote[] = [
+  {
+    version: '1.13.1',
+    releaseDate: '2026-09-12',
+    type: 'patch',
+    title: 'بهینه‌سازی اسکریپت‌های نصب خودکار لینوکس (One-Liner curl installer) و تنظیمات مخزن گیت‌هاب',
+    title_en: 'Automated Linux Deployment Script Optimization (One-Liner curl installer) & Repository Configuration',
+    changes: [
+      'بهینه‌سازی و هماهنگ‌سازی اسکریپت‌های نصب لینوکس (setup-panel.sh و install.sh) برای اجرای مستقیم با یک دستور روی اوبونتو و دبیان',
+      'پشتیبانی از دریافت مستقیم مخزن گیت‌هاب arkaadia/NetTop و میرورهای جایگزین در صورت قطعی شبکه',
+      'تولید خودکار گواهی امنیتی Self-Signed SSL، کانفیگ Nginx، سرویس systemd و ایزولاسیون کامل پورت‌های داخلی'
+    ],
+    changes_en: [
+      'Optimized and harmonized Linux automated installers (setup-panel.sh and install.sh) for one-liner curl execution on Ubuntu & Debian',
+      'Updated direct GitHub repository target to arkaadia/NetTop with automated mirror fallbacks',
+      'Automated self-signed TLS SSL generation, Nginx reverse proxy configuration, systemd service management, and internal port isolation'
+    ]
+  },
   {
     version: '1.13.0',
     releaseDate: '2026-09-12',

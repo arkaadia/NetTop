@@ -30,8 +30,8 @@ log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 log_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-PANEL_VERSION="1.13.0"
-REPO_URL="${REPO_URL:-https://github.com/arkaadia/net.git}"
+PANEL_VERSION="1.13.1"
+REPO_URL="${REPO_URL:-https://github.com/arkaadia/NetTop.git}"
 FALLBACK_REPO_URL="https://github.com/shahbazimasoud/NetTopology.git"
 
 clear 2>/dev/null || true
@@ -45,9 +45,9 @@ cat << "EOF"
   ██║ ╚████║███████╗   ██║      ██║   ╚██████╔╝██║     ╚██████╔╝
   ╚═╝  ╚═══╝╚══════╝   ╚═╝      ╚═╝    ╚═════╝ ╚═╝      ╚═════╝ 
         CISCO NETWORK TOPOLOGY & PORT SECURITY MANAGEMENT PANEL
-        Version: 1.10.0 (Production Stable)
+        Version: 1.13.1 (Production Stable)
         Developer: Masoud Shahbazi (https://www.linkedin.com/in/masoudshahbazi/)
-        Repository: https://github.com/shahbazimasoud/NetTopology
+        Repository: https://github.com/arkaadia/NetTop
 ======================================================================
 EOF
 echo -e "${NC}"
@@ -55,7 +55,7 @@ echo -e "${NC}"
 # Check privileges
 if [ "$EUID" -ne 0 ]; then
   log_error "Please run this installer as root (using sudo)."
-  echo -e "${YELLOW}Usage:${NC} curl -sSL https://raw.githubusercontent.com/shahbazimasoud/NetTopology/master/setup-panel.sh | sudo bash"
+  echo -e "${YELLOW}Usage:${NC} curl -sSL https://raw.githubusercontent.com/arkaadia/NetTop/master/setup-panel.sh | sudo bash"
   echo -e "${YELLOW}Or locally:${NC} sudo bash setup-panel.sh"
   exit 1
 fi
