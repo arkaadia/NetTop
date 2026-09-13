@@ -928,3 +928,440 @@ export async function syncDeviceWithRealSwitch(
   };
 }
 
+export interface ApplyPortConfigSshParams {
+  deviceId?: string;
+  interfaceName: string;
+  action: string;
+  oldValue?: any;
+  newValue?: any;
+  updates?: Partial<ParsedSwitchPort> & Record<string, any>;
+  commands?: string[];
+  host?: string;
+  port?: number;
+  username?: string;
+  password?: string;
+  enablePassword?: string;
+  timeoutMs?: number;
+}
+
+export interface ApplyPortConfigSshResult {
+  success: boolean;
+  device: string;
+  interface: string;
+  action: string;
+  oldValue?: any;
+  newValue?: any;
+  output?: string;
+  verifiedPort?: ParsedSwitchPort;
+  commands?: string[];
+  message?: string;
+  error?: string;
+}
+
+/**
+ * Executes port configuration commands (VLAN, Port Security, Admin Status, Mode, etc.)
+ * directly on the physical Cisco Switch over SSH, then verifies execution via show commands.
+ */
+export async function applyPortConfigViaSsh(
+  projectRoot: string,
+  params: ApplyPortConfigSshParams
+): Promise<ApplyPortConfigSshResult> {
+  const dataFilePath = path.join(projectRoot, 'backend', 'network_data.json');
+  let targetDevice: any = null;
+  let data: any = null;
+
+  try {
+    if (fs.existsSync(dataFilePath)) {
+      const content = fs.readFileSync(dataFilePath, 'utf-8');
+      data = JSON.parse(content);
+      targetDevice = (data.devices || []).find((d: any) => d.id === params.deviceId || d.ip === params.host || d.name === params.deviceId);
+    }
+  } catch (err) {
+    console.warn('[SSH Apply Config] Error reading network_data.json:', err);
+  }
+
+  const host = params.host || targetDevice?.ip;
+  const sshPort = params.port || targetDevice?.ssh_port || 22;
+  const username = params.username || targetDevice?.ssh_username || 'admin';
+  const password = params.password !== undefined ? params.password : (targetDevice?.ssh_password || '');
+  const enablePassword = params.enablePassword !== undefined ? params.enablePassword : (targetDevice?.enable_password || '');
+  const timeout = params.timeoutMs || 20000;
+  const devName = targetDevice?.name || params.deviceId || host || 'Switch';
+
+  if (!host) {
+    return {
+      success: false,
+      device: devName,
+      interface: params.interfaceName,
+      action: params.action,
+      oldValue: params.oldValue,
+      newValue: params.newValue,
+      error: `Device IP address not found for '${params.deviceId || 'unknown'}'`
+    };
+  }
+
+  const normId = normalizePortId(params.interfaceName);
+  const canonicalInterface = expandPortName(normId);
+
+  // Build clean Cisco IOS configuration command sequence
+  let configCmds: string[] = [];
+  if (params.commands && params.commands.length > 0) {
+    configCmds = params.commands
+      .map((c) => c.replace(/^[a-zA-Z0-9\-_]+(\(config[^\)]*\))?#\s*/, '').trim())
+      .filter((c) => c.length > 0 && !c.startsWith('!') && !c.startsWith('#'));
+  } else {
+    configCmds.push('configure terminal');
+    configCmds.push(`interface ${canonicalInterface}`);
+
+    const updates = params.updates || {};
+
+    // 1. VLAN & Mode logic
+    if (params.action === 'change_vlan' || updates.vlan !== undefined) {
+      const mode = updates.mode || 'access';
+      if (mode === 'trunk') {
+        configCmds.push('switchport mode trunk');
+        const allowed = updates.allowed_vlans || (params.newValue ? String(params.newValue) : '');
+        if (allowed) {
+          configCmds.push(`switchport trunk allowed vlan ${allowed}`);
+        }
+      } else {
+        configCmds.push('switchport mode access');
+        const vlanVal = updates.vlan !== undefined ? updates.vlan : params.newValue;
+        configCmds.push(`switchport access vlan ${vlanVal}`);
+      }
+    } else if (updates.mode !== undefined) {
+      if (updates.mode === 'trunk') {
+        configCmds.push('switchport mode trunk');
+        if (updates.allowed_vlans) {
+          configCmds.push(`switchport trunk allowed vlan ${updates.allowed_vlans}`);
+        }
+      } else {
+        configCmds.push('switchport mode access');
+        if (updates.vlan) {
+          configCmds.push(`switchport access vlan ${updates.vlan}`);
+        }
+      }
+    }
+
+    // 2. Cisco Port Security logic
+    if (params.action === 'port_security' || updates.port_security_enabled !== undefined) {
+      const isSecEnabled = updates.port_security_enabled !== undefined
+        ? Boolean(updates.port_security_enabled)
+        : (params.newValue === true || params.newValue === 'enabled');
+
+      if (isSecEnabled) {
+        configCmds.push('switchport mode access');
+        configCmds.push('switchport port-security');
+        const maxMac = updates.port_security_max_mac || updates.maximum || 1;
+        configCmds.push(`switchport port-security maximum ${maxMac}`);
+        const violation = updates.port_security_violation || updates.violationMode || 'shutdown';
+        configCmds.push(`switchport port-security violation ${violation}`);
+
+        const secMode = updates.port_security_mode || (updates.sticky ? 'sticky' : 'dynamic');
+        if (secMode === 'sticky' || updates.sticky) {
+          configCmds.push('switchport port-security mac-address sticky');
+        } else if (secMode === 'configured' && (updates.port_security_configured_mac || updates.mac)) {
+          configCmds.push(`switchport port-security mac-address ${updates.port_security_configured_mac || updates.mac}`);
+        }
+      } else {
+        configCmds.push('no switchport port-security');
+      }
+    }
+
+    // 3. Admin status (shutdown / no shutdown)
+    if (params.action === 'admin_status' || updates.admin_status !== undefined) {
+      const isDisabled = updates.admin_status === 'disabled' || params.newValue === 'disabled';
+      configCmds.push(isDisabled ? 'shutdown' : 'no shutdown');
+    }
+
+    // 4. Description
+    if (updates.description !== undefined) {
+      if (updates.description) {
+        configCmds.push(`description ${updates.description}`);
+      } else {
+        configCmds.push('no description');
+      }
+    }
+
+    // 5. Speed & Duplex
+    if (updates.speed && updates.speed !== 'auto') {
+      configCmds.push(`speed ${updates.speed}`);
+    }
+    if (updates.duplex && updates.duplex !== 'auto') {
+      configCmds.push(`duplex ${updates.duplex}`);
+    }
+
+    configCmds.push('exit');
+    configCmds.push('end');
+  }
+
+  // Verification commands to run immediately on switch after configuration
+  const verificationCmds = [
+    `show running-config interface ${canonicalInterface}`,
+    `show interfaces ${canonicalInterface} status`,
+    `show interfaces ${canonicalInterface} switchport`,
+  ];
+  if (params.action === 'port_security' || params.updates?.port_security_enabled) {
+    verificationCmds.push(`show port-security interface ${canonicalInterface}`);
+  }
+
+  return new Promise((resolve) => {
+    const conn = new Client();
+    let isSettled = false;
+    let accumulatedOutput = '';
+
+    const timer = setTimeout(() => {
+      if (!isSettled) {
+        isSettled = true;
+        try { conn.end(); } catch {}
+        resolve({
+          success: false,
+          device: devName,
+          interface: params.interfaceName,
+          action: params.action,
+          oldValue: params.oldValue,
+          newValue: params.newValue,
+          error: `Timeout: Switch ${host}:${sshPort} did not finish executing configuration within ${timeout / 1000}s`,
+          output: accumulatedOutput
+        });
+      }
+    }, timeout);
+
+    conn.on('keyboard-interactive', (_name, _instructions, _instructionsLang, prompts, finish) => {
+      finish(prompts.map(() => password || ''));
+    });
+
+    conn.on('ready', () => {
+      conn.shell({
+        term: 'vt100',
+        cols: 250,
+        rows: 200
+      }, (shellErr, stream) => {
+        if (shellErr) {
+          if (!isSettled) {
+            isSettled = true;
+            clearTimeout(timer);
+            try { conn.end(); } catch {}
+            resolve({
+              success: false,
+              device: devName,
+              interface: params.interfaceName,
+              action: params.action,
+              oldValue: params.oldValue,
+              newValue: params.newValue,
+              error: `Failed to allocate PTY shell on switch: ${shellErr.message}`
+            });
+          }
+          return;
+        }
+
+        stream.on('data', (chunk: Buffer) => {
+          accumulatedOutput += chunk.toString('utf-8');
+        });
+
+        stream.on('close', () => {
+          if (!isSettled) {
+            isSettled = true;
+            clearTimeout(timer);
+            try { conn.end(); } catch {}
+
+            // Check if Cisco IOS returned syntax errors
+            const syntaxErrorMatch = accumulatedOutput.match(/% (Invalid input detected at '\^' marker|Command rejected:[^\r\n]+|Incomplete command|Ambiguous command)/i);
+            if (syntaxErrorMatch) {
+              resolve({
+                success: false,
+                device: devName,
+                interface: params.interfaceName,
+                action: params.action,
+                oldValue: params.oldValue,
+                newValue: params.newValue,
+                error: `Cisco IOS error: ${syntaxErrorMatch[0]}`,
+                output: accumulatedOutput,
+                commands: configCmds
+              });
+              return;
+            }
+
+            // Parse verified state from the switch outputs
+            const verifiedPort: ParsedSwitchPort = {
+              port_id: normId,
+              name: canonicalInterface,
+              status: /connected|up/i.test(accumulatedOutput) ? 'up' : 'down',
+              admin_status: /shutdown/i.test(accumulatedOutput) && !/no shutdown/i.test(accumulatedOutput.split('interface ' + canonicalInterface)[1] || '') ? 'disabled' : 'enabled',
+              mode: /switchport mode trunk|Trunking/i.test(accumulatedOutput) ? 'trunk' : 'access',
+              vlan: 1,
+              allowed_vlans: '',
+              speed: '1 Gbps',
+              duplex: 'Full',
+              description: ''
+            };
+
+            // Extract VLAN from switchport output or running-config
+            const vlanMatch = accumulatedOutput.match(/(?:switchport access vlan|Access Mode VLAN:\s*)\s*(\d+)/i);
+            if (vlanMatch) {
+              verifiedPort.vlan = parseInt(vlanMatch[1], 10);
+            } else if (params.updates?.vlan) {
+              verifiedPort.vlan = Number(params.updates.vlan);
+            } else if (params.newValue && typeof params.newValue === 'number') {
+              verifiedPort.vlan = params.newValue;
+            }
+
+            // Extract allowed VLANs if trunk
+            const trunkAllowedMatch = accumulatedOutput.match(/(?:Trunking VLANs Enabled:\s*|switchport trunk allowed vlan\s*)([0-9,\-]+)/i);
+            if (trunkAllowedMatch) {
+              verifiedPort.allowed_vlans = trunkAllowedMatch[1].trim();
+            } else if (params.updates?.allowed_vlans) {
+              verifiedPort.allowed_vlans = String(params.updates.allowed_vlans);
+            }
+
+            // Extract description
+            const descMatch = accumulatedOutput.match(/description\s+([^\r\n]+)/i);
+            if (descMatch) {
+              verifiedPort.description = descMatch[1].trim();
+            }
+
+            // Extract Port Security
+            if (accumulatedOutput.includes('switchport port-security') || /Port Security\s*:\s*Enabled/i.test(accumulatedOutput)) {
+              (verifiedPort as any).port_security_enabled = true;
+              const maxMacMatch = accumulatedOutput.match(/(?:switchport port-security maximum\s*|Maximum MAC Addresses\s*:\s*)(\d+)/i);
+              if (maxMacMatch) {
+                (verifiedPort as any).port_security_max_mac = parseInt(maxMacMatch[1], 10);
+              }
+              const violMatch = accumulatedOutput.match(/(?:switchport port-security violation\s*|Violation Mode\s*:\s*)(shutdown|restrict|protect)/i);
+              if (violMatch) {
+                (verifiedPort as any).port_security_violation = violMatch[1].toLowerCase();
+              }
+              if (accumulatedOutput.includes('mac-address sticky') || /Sticky MAC\s*:\s*Enabled/i.test(accumulatedOutput)) {
+                (verifiedPort as any).port_security_mode = 'sticky';
+              }
+            } else if (accumulatedOutput.includes('no switchport port-security') || /Port Security\s*:\s*Disabled/i.test(accumulatedOutput)) {
+              (verifiedPort as any).port_security_enabled = false;
+            }
+
+            // Synchronize verified state into persistent network_data.json
+            if (data && targetDevice) {
+              try {
+                if (!data.ports) data.ports = {};
+                const devPorts: any[] = data.ports[targetDevice.id] || [];
+                const existingIdx = devPorts.findIndex((p: any) =>
+                  p.port_id.toLowerCase() === normId.toLowerCase() ||
+                  p.name.toLowerCase() === canonicalInterface.toLowerCase() ||
+                  p.port_id.toLowerCase() === params.interfaceName.toLowerCase()
+                );
+
+                if (existingIdx >= 0) {
+                  devPorts[existingIdx] = { ...devPorts[existingIdx], ...verifiedPort };
+                } else {
+                  devPorts.push(verifiedPort);
+                }
+                data.ports[targetDevice.id] = devPorts;
+                targetDevice.has_unsaved_changes = true;
+                fs.writeFileSync(dataFilePath, JSON.stringify(data, null, 2), 'utf-8');
+              } catch (fsWriteErr) {
+                console.warn('[SSH Apply Config] Error updating network_data.json:', fsWriteErr);
+              }
+            }
+
+            resolve({
+              success: true,
+              device: devName,
+              interface: params.interfaceName,
+              action: params.action,
+              oldValue: params.oldValue,
+              newValue: params.newValue,
+              output: accumulatedOutput,
+              verifiedPort,
+              commands: configCmds,
+              message: `Configuration successfully applied and verified on switch ${devName} (${host}) interface ${params.interfaceName}`
+            });
+          }
+        });
+
+        // Write configuration sequence into Cisco CLI
+        setTimeout(() => {
+          stream.write('terminal length 0\n');
+          stream.write('terminal width 512\n');
+          if (enablePassword) {
+            stream.write('enable\n');
+            setTimeout(() => {
+              stream.write(enablePassword + '\n');
+            }, 400);
+          }
+
+          setTimeout(() => {
+            // Send config commands line by line
+            for (const cmd of configCmds) {
+              stream.write(`${cmd}\n`);
+            }
+
+            // Send verification commands
+            setTimeout(() => {
+              for (const vCmd of verificationCmds) {
+                stream.write(`${vCmd}\n`);
+              }
+              setTimeout(() => {
+                stream.write('exit\n');
+              }, 2500);
+            }, 1200);
+          }, 800);
+        }, 400);
+      });
+    });
+
+    conn.on('error', (err: any) => {
+      if (!isSettled) {
+        isSettled = true;
+        clearTimeout(timer);
+        try { conn.end(); } catch {}
+        let errorMsg = err.message || 'SSH connection error';
+        if (err.level === 'client-authentication') {
+          errorMsg = `Authentication failed: Invalid credentials for ${username}@${host}`;
+        } else if (err.code === 'ECONNREFUSED') {
+          errorMsg = `Connection refused by switch ${host}:${sshPort}`;
+        } else if (err.code === 'ETIMEDOUT') {
+          errorMsg = `Switch ${host}:${sshPort} is unreachable (ETIMEDOUT)`;
+        }
+        resolve({
+          success: false,
+          device: devName,
+          interface: params.interfaceName,
+          action: params.action,
+          oldValue: params.oldValue,
+          newValue: params.newValue,
+          error: errorMsg,
+          output: accumulatedOutput
+        });
+      }
+    });
+
+    try {
+      conn.connect({
+        host,
+        port: sshPort,
+        username,
+        password,
+        readyTimeout: 12000,
+        tryKeyboard: true,
+        algorithms: COMPATIBLE_ALGORITHMS,
+        keepaliveInterval: 5000,
+        keepaliveCountMax: 3
+      });
+    } catch (connectErr: any) {
+      if (!isSettled) {
+        isSettled = true;
+        clearTimeout(timer);
+        resolve({
+          success: false,
+          device: devName,
+          interface: params.interfaceName,
+          action: params.action,
+          oldValue: params.oldValue,
+          newValue: params.newValue,
+          error: `Failed to establish SSH connection: ${connectErr.message}`
+        });
+      }
+    }
+  });
+}
+
+

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Cable, Zap, Shield, ShieldCheck, ShieldAlert, CheckCircle2, AlertCircle, Edit3, Save, Power, Terminal, AlertTriangle, ArrowRight, Check, Lock, Key, Layers, CheckSquare, Square, RefreshCw, Sparkles } from 'lucide-react';
 import { Device, SwitchPort, VlanInfo } from '../types';
-import { fetchDevicePorts, updateSwitchPort, writeMemory, batchUpdateSwitchPorts, syncDeviceWithRealSwitch, fetchVlans } from '../services/api';
+import { fetchDevicePorts, updateSwitchPort, writeMemory, batchUpdateSwitchPorts, syncDeviceWithRealSwitch, fetchVlans, applySwitchPortConfigViaSsh } from '../services/api';
 import { NetworkPortSvg } from './NetworkPortSvg';
 import { CiscoPortContextMenu } from './CiscoPortContextMenu';
 import { CiscoCommandConfirmModal } from './CiscoCommandConfirmModal';
@@ -426,74 +426,11 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
     }, 60);
   };
 
-  // Direct Save & Apply immediately to the switch port without secondary confirmation modal
-  const handleDirectSave = async () => {
+  // Direct Save & Apply immediately to the switch port with mandatory preview
+  const handleDirectSave = () => {
     if (!device || !selectedPort) return;
-    try {
-      setIsSaving(true);
-      const res = await updateSwitchPort(device.id, selectedPort.port_id, {
-        admin_status: editAdminStatus,
-        status: editAdminStatus === 'disabled' ? 'down' : 'up',
-        mode: editMode,
-        vlan: editVlan,
-        allowed_vlans: editAllowedVlans,
-        connected_device: editConnected,
-        description: editDesc,
-        port_security_enabled: editPortSecEnabled,
-        port_security_max_mac: editPortSecMaxMac,
-        port_security_mode: editPortSecMode,
-        port_security_configured_mac: editPortSecConfiguredMac,
-        port_security_violation: editPortSecViolation,
-      });
-
-      const updatedPort: SwitchPort = res.port || {
-        ...selectedPort,
-        admin_status: editAdminStatus,
-        status: editAdminStatus === 'disabled' ? 'down' : 'up',
-        mode: editMode,
-        vlan: editVlan,
-        allowed_vlans: editAllowedVlans,
-        connected_device: editConnected,
-        description: editDesc,
-        port_security_enabled: editPortSecEnabled,
-        port_security_max_mac: editPortSecMaxMac,
-        port_security_mode: editPortSecMode,
-        port_security_configured_mac: editPortSecConfiguredMac,
-        port_security_violation: editPortSecViolation,
-      };
-
-      setPorts((prev) =>
-        prev.map((p) => {
-          const isTarget =
-            p.port_id.toLowerCase() === selectedPort.port_id.toLowerCase() ||
-            p.name.toLowerCase() === selectedPort.name.toLowerCase() ||
-            p.port_id.toLowerCase() === updatedPort.port_id.toLowerCase() ||
-            p.name.toLowerCase() === updatedPort.name.toLowerCase();
-          return isTarget ? updatedPort : p;
-        })
-      );
-      setSelectedPort(updatedPort);
-      setIsEditing(false);
-      if (device) {
-        device.has_unsaved_changes = true;
-      }
-      setSyncStatusMessage({
-        text: isEn
-          ? `Port ${selectedPort.name || selectedPort.port_id} configuration (VLAN ${editVlan}, Mode ${editMode.toUpperCase()}) successfully applied & saved.`
-          : `پیکربندی پورت ${selectedPort.name || selectedPort.port_id} (ویلن ${editVlan}، مد ${editMode.toUpperCase()}) با موفقیت ذخیره و روی پورت اعمال شد.`,
-        isSuccess: true,
-      });
-      if (onPortUpdated) onPortUpdated();
-    } catch (err: any) {
-      setSyncStatusMessage({
-        text: isEn
-          ? `Failed to apply port configuration: ${err.message}`
-          : `خطا در اعمال پیکربندی پورت: ${err.message}`,
-        isSuccess: false,
-      });
-    } finally {
-      setIsSaving(false);
-    }
+    // Always open the Configuration Preview Modal before sending commands to real switch
+    setShowConfirmSummary(true);
   };
 
   // Called when user clicks "پیش‌نمایش CLI و تایید" -> opens summary modal first
@@ -501,29 +438,45 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
     setShowConfirmSummary(true);
   };
 
-  // Called after confirmation in summary modal
+  // Called after user confirms in the Configuration Preview modal
   const handleConfirmSave = async () => {
     if (!device || !selectedPort) return;
     try {
       setIsSaving(true);
-      const res = await updateSwitchPort(device.id, selectedPort.port_id, {
-        admin_status: editAdminStatus,
-        status: editAdminStatus === 'disabled' ? 'down' : 'up',
-        mode: editMode,
-        vlan: editVlan,
-        allowed_vlans: editAllowedVlans,
-        connected_device: editConnected,
-        description: editDesc,
-        port_security_enabled: editPortSecEnabled,
-        port_security_max_mac: editPortSecMaxMac,
-        port_security_mode: editPortSecMode,
-        port_security_configured_mac: editPortSecConfiguredMac,
-        port_security_violation: editPortSecViolation,
-      });
+      setError(null);
 
-      // Update local ports
-      const updatedPort = res.port || {
-        ...selectedPort,
+      // Determine the primary setting / action being applied
+      let actionType: 'change_vlan' | 'port_security' | 'admin_status' | 'mode' | 'description' | 'allowed_vlans' | 'port_config' = 'port_config';
+      let oldVal: any = selectedPort.vlan;
+      let newVal: any = editVlan;
+
+      if (selectedPort.vlan !== editVlan) {
+        actionType = 'change_vlan';
+        oldVal = selectedPort.vlan;
+        newVal = editVlan;
+      } else if (Boolean(selectedPort.port_security_enabled) !== editPortSecEnabled) {
+        actionType = 'port_security';
+        oldVal = Boolean(selectedPort.port_security_enabled);
+        newVal = editPortSecEnabled;
+      } else if (selectedPort.admin_status !== editAdminStatus) {
+        actionType = 'admin_status';
+        oldVal = selectedPort.admin_status;
+        newVal = editAdminStatus;
+      } else if (selectedPort.mode !== editMode) {
+        actionType = 'mode';
+        oldVal = selectedPort.mode;
+        newVal = editMode;
+      } else if ((selectedPort.allowed_vlans || '') !== editAllowedVlans) {
+        actionType = 'allowed_vlans';
+        oldVal = selectedPort.allowed_vlans || '';
+        newVal = editAllowedVlans;
+      } else if ((selectedPort.description || '') !== editDesc) {
+        actionType = 'description';
+        oldVal = selectedPort.description || '';
+        newVal = editDesc;
+      }
+
+      const updatesPayload: Partial<SwitchPort> = {
         admin_status: editAdminStatus,
         status: editAdminStatus === 'disabled' ? 'down' : 'up',
         mode: editMode,
@@ -538,34 +491,92 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
         port_security_violation: editPortSecViolation,
       };
 
-      setPorts((prev) =>
-        prev.map((p) => {
-          const isTarget =
-            p.port_id.toLowerCase() === selectedPort.port_id.toLowerCase() ||
-            p.name.toLowerCase() === selectedPort.name.toLowerCase() ||
-            p.port_id.toLowerCase() === updatedPort.port_id.toLowerCase() ||
-            p.name.toLowerCase() === updatedPort.name.toLowerCase();
-          return isTarget ? updatedPort : p;
-        })
-      );
-      setSelectedPort(updatedPort);
-      setIsEditing(false);
-      setShowConfirmSummary(false);
-      if (device) {
-        device.has_unsaved_changes = true;
-      }
-      setSyncStatusMessage({
-        text: isEn
-          ? `Port ${selectedPort.name || selectedPort.port_id} configuration (VLAN ${editVlan}) updated and saved.`
-          : `پیکربندی پورت ${selectedPort.name || selectedPort.port_id} (ویلن ${editVlan}) با موفقیت ذخیره و اعمال شد.`,
-        isSuccess: true,
+      const rawCommands = generateRawCiscoCommands();
+
+      // Real Switch Execution: Frontend -> API -> Backend -> SSH Service -> Switch
+      const res = await applySwitchPortConfigViaSsh({
+        deviceId: device.id,
+        interface: selectedPort.port_id,
+        action: actionType,
+        oldValue: oldVal,
+        newValue: newVal,
+        updates: updatesPayload,
+        commands: rawCommands,
       });
-      if (onPortUpdated) onPortUpdated();
+
+      if (res.success) {
+        // Step 4: Refresh after change - Re-fetch real switch port data from backend
+        await loadPorts();
+
+        if (res.verifiedPort) {
+          const verified = res.verifiedPort;
+          setPorts((prev) =>
+            prev.map((p) => {
+              const isTarget =
+                p.port_id.toLowerCase() === selectedPort.port_id.toLowerCase() ||
+                p.name.toLowerCase() === selectedPort.name.toLowerCase() ||
+                p.port_id.toLowerCase() === verified.port_id.toLowerCase() ||
+                p.name.toLowerCase() === verified.name.toLowerCase();
+              return isTarget ? verified : p;
+            })
+          );
+          setSelectedPort(verified);
+        }
+
+        setIsEditing(false);
+        setShowConfirmSummary(false);
+        if (device) {
+          device.has_unsaved_changes = true;
+        }
+
+        // Requirement 8: Loading & Response
+        setSyncStatusMessage({
+          text: isEn
+            ? `Success: Configuration applied successfully on switch ${device.name} (${selectedPort.name || selectedPort.port_id}).`
+            : `Success: Configuration applied successfully. (پیکربندی با موفقیت روی پورت ${selectedPort.name || selectedPort.port_id} سوئیچ ${device.name} اعمال شد)`,
+          isSuccess: true,
+        });
+
+        if (onPortUpdated) onPortUpdated();
+      } else {
+        // Requirement 8 & Failure Handling: Revert Frontend values to previous values!
+        setEditAdminStatus(selectedPort.admin_status);
+        setEditMode(selectedPort.mode);
+        setEditVlan(selectedPort.vlan);
+        setEditAllowedVlans(selectedPort.allowed_vlans || '');
+        setEditConnected(selectedPort.connected_device || '');
+        setEditDesc(selectedPort.description || '');
+        setEditPortSecEnabled(!!selectedPort.port_security_enabled);
+        setEditPortSecMaxMac(selectedPort.port_security_max_mac || 1);
+        setEditPortSecMode(selectedPort.port_security_mode || 'sticky');
+        setEditPortSecConfiguredMac(selectedPort.port_security_configured_mac || '');
+        setEditPortSecViolation(selectedPort.port_security_violation || 'shutdown');
+
+        setSyncStatusMessage({
+          text: isEn
+            ? `Failed: Configuration failed. ${res.error || 'Connection to physical switch failed or command was rejected.'}`
+            : `Failed: Configuration failed. (${res.error || 'ارتباط با سوئیچ فیزیکی برقرار نشد یا دستور رد شد'})`,
+          isSuccess: false,
+        });
+      }
     } catch (err: any) {
+      // Revert Frontend values on exception
+      setEditAdminStatus(selectedPort.admin_status);
+      setEditMode(selectedPort.mode);
+      setEditVlan(selectedPort.vlan);
+      setEditAllowedVlans(selectedPort.allowed_vlans || '');
+      setEditConnected(selectedPort.connected_device || '');
+      setEditDesc(selectedPort.description || '');
+      setEditPortSecEnabled(!!selectedPort.port_security_enabled);
+      setEditPortSecMaxMac(selectedPort.port_security_max_mac || 1);
+      setEditPortSecMode(selectedPort.port_security_mode || 'sticky');
+      setEditPortSecConfiguredMac(selectedPort.port_security_configured_mac || '');
+      setEditPortSecViolation(selectedPort.port_security_violation || 'shutdown');
+
       setSyncStatusMessage({
         text: isEn
-          ? `Failed to update port configuration: ${err.message}`
-          : `خطا در ذخیره پیکربندی پورت: ${err.message}`,
+          ? `Failed: Configuration failed. ${err.message}`
+          : `Failed: Configuration failed. (${err.message})`,
         isSuccess: false,
       });
     } finally {
@@ -739,6 +750,93 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
       lines.push(`${device.name}(config-if)# description ${editDesc}`);
     }
     lines.push(`${device.name}(config-if)# exit`);
+    return lines.join('\n');
+  };
+
+  // Generate raw Cisco CLI commands for direct SSH execution
+  const generateRawCiscoCommands = () => {
+    if (!selectedPort) return [];
+    const cmds: string[] = [
+      'configure terminal',
+      `interface ${selectedPort.port_id}`,
+    ];
+    if (editMode === 'trunk') {
+      cmds.push('switchport mode trunk');
+      if (editAllowedVlans) {
+        cmds.push(`switchport trunk allowed vlan ${editAllowedVlans}`);
+      }
+    } else {
+      cmds.push('switchport mode access');
+      cmds.push(`switchport access vlan ${editVlan}`);
+    }
+
+    if (editPortSecEnabled) {
+      if (editMode !== 'access') {
+        cmds.push('switchport mode access');
+      }
+      cmds.push('switchport port-security');
+      cmds.push(`switchport port-security maximum ${editPortSecMaxMac}`);
+      if (editPortSecMode === 'sticky') {
+        cmds.push('switchport port-security mac-address sticky');
+      } else if (editPortSecMode === 'configured' && editPortSecConfiguredMac) {
+        cmds.push(`switchport port-security mac-address ${editPortSecConfiguredMac}`);
+      }
+      cmds.push(`switchport port-security violation ${editPortSecViolation}`);
+    } else if (selectedPort.port_security_enabled && !editPortSecEnabled) {
+      cmds.push('no switchport port-security');
+    }
+
+    if (editAdminStatus === 'disabled') {
+      cmds.push('shutdown');
+    } else {
+      cmds.push('no shutdown');
+    }
+    if (editDesc) {
+      cmds.push(`description ${editDesc}`);
+    }
+    cmds.push('exit');
+    cmds.push('end');
+    return cmds;
+  };
+
+  // Clean Configuration preview matching exact user specification
+  const generateCleanConfigPreview = () => {
+    if (!selectedPort) return '';
+    const lines: string[] = [
+      `interface ${selectedPort.port_id}`,
+    ];
+    if (editMode === 'trunk') {
+      lines.push('switchport mode trunk');
+      if (editAllowedVlans) {
+        lines.push(`switchport trunk allowed vlan ${editAllowedVlans}`);
+      }
+    } else {
+      lines.push('switchport mode access');
+      lines.push(`switchport access vlan ${editVlan}`);
+    }
+    if (editPortSecEnabled) {
+      if (editMode !== 'access') {
+        lines.push('switchport mode access');
+      }
+      lines.push('switchport port-security');
+      lines.push(`switchport port-security maximum ${editPortSecMaxMac}`);
+      if (editPortSecMode === 'sticky') {
+        lines.push('switchport port-security mac-address sticky');
+      } else if (editPortSecMode === 'configured' && editPortSecConfiguredMac) {
+        lines.push(`switchport port-security mac-address ${editPortSecConfiguredMac}`);
+      }
+      lines.push(`switchport port-security violation ${editPortSecViolation}`);
+    } else if (selectedPort.port_security_enabled && !editPortSecEnabled) {
+      lines.push('no switchport port-security');
+    }
+    if (editAdminStatus === 'disabled') {
+      lines.push('shutdown');
+    } else {
+      lines.push('no shutdown');
+    }
+    if (editDesc) {
+      lines.push(`description ${editDesc}`);
+    }
     return lines.join('\n');
   };
 
@@ -2042,13 +2140,78 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
 
               {/* Body Content */}
               <div className="p-5 space-y-4 flex-1 overflow-y-auto">
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  {isEn ? (
-                    <>The following changes will be applied to port <b className="font-mono text-white">{selectedPort.port_id}</b>. Please review and confirm before applying:</>
-                  ) : (
-                    <>تغییرات زیر روی پورت <b className="font-mono text-white">{selectedPort.port_id}</b> اعمال خواهند شد. لطفاً مقادیر جدید را قبل از ذخیره نهایی بررسی و تایید نمایید:</>
-                  )}
-                </p>
+                {/* Clean Exact Configuration Preview as requested */}
+                <div className="p-4 rounded-xl bg-slate-950/70 border border-white/10 space-y-3 font-mono text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-300">
+                    <div>
+                      <span className="text-slate-400 font-sans text-[11px] block">{isEn ? 'Device:' : 'سوئیچ / Device:'}</span>
+                      <span className="font-bold text-white text-sm">{device.name}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-sans text-[11px] block">{isEn ? 'Interface:' : 'اینترفیس / Interface:'}</span>
+                      <span className="font-bold text-cyan-300 text-sm">{selectedPort.name || selectedPort.port_id}</span>
+                    </div>
+                    {selectedPort.vlan !== editVlan && (
+                      <>
+                        <div>
+                          <span className="text-slate-400 font-sans text-[11px] block">{isEn ? 'Current VLAN:' : 'ویلن فعلی / Current VLAN:'}</span>
+                          <span className="font-bold text-slate-300">VLAN {selectedPort.vlan}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 font-sans text-[11px] block">{isEn ? 'New VLAN:' : 'ویلن جدید / New VLAN:'}</span>
+                          <span className="font-bold text-emerald-400">VLAN {editVlan}</span>
+                        </div>
+                      </>
+                    )}
+                    {Boolean(selectedPort.port_security_enabled) !== editPortSecEnabled && (
+                      <>
+                        <div>
+                          <span className="text-slate-400 font-sans text-[11px] block">{isEn ? 'Current Port Security:' : 'امنیت پورت فعلی:'}</span>
+                          <span className="font-bold text-slate-300">{selectedPort.port_security_enabled ? 'Enabled' : 'Disabled'}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 font-sans text-[11px] block">{isEn ? 'New Port Security:' : 'امنیت پورت جدید:'}</span>
+                          <span className="font-bold text-emerald-400">{editPortSecEnabled ? 'Enabled' : 'Disabled'}</span>
+                        </div>
+                      </>
+                    )}
+                    {selectedPort.mode !== editMode && (
+                      <>
+                        <div>
+                          <span className="text-slate-400 font-sans text-[11px] block">{isEn ? 'Current Mode:' : 'مود فعلی:'}</span>
+                          <span className="font-bold text-slate-300">{selectedPort.mode}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 font-sans text-[11px] block">{isEn ? 'New Mode:' : 'مود جدید:'}</span>
+                          <span className="font-bold text-cyan-300">{editMode}</span>
+                        </div>
+                      </>
+                    )}
+                    {selectedPort.admin_status !== editAdminStatus && (
+                      <>
+                        <div>
+                          <span className="text-slate-400 font-sans text-[11px] block">{isEn ? 'Current Status:' : 'وضعیت فعلی:'}</span>
+                          <span className="font-bold text-slate-300">{selectedPort.admin_status}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 font-sans text-[11px] block">{isEn ? 'New Status:' : 'وضعیت جدید:'}</span>
+                          <span className="font-bold text-amber-300">{editAdminStatus}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Clean Configuration Preview Script */}
+                  <div className="pt-2 border-t border-white/10">
+                    <div className="text-[11px] font-sans text-slate-400 font-medium mb-1 flex items-center justify-between">
+                      <span>{isEn ? 'Configuration to be applied:' : 'پیکربندی که روی سوئیچ اعمال می‌شود (Configuration):'}</span>
+                      <span className="text-[10px] text-emerald-400 font-mono">SSH / Cisco CLI</span>
+                    </div>
+                    <pre className="p-3 rounded-lg bg-slate-900 border border-white/10 text-emerald-300 font-mono text-xs leading-relaxed select-all" dir="ltr">
+                      {generateCleanConfigPreview()}
+                    </pre>
+                  </div>
+                </div>
 
                 {/* Diff Comparison Table */}
                 <div className="border border-white/10 rounded-xl overflow-hidden text-xs bg-black/20">
@@ -2082,10 +2245,10 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
                   </table>
                 </div>
 
-                {/* Cisco CLI Script Preview */}
+                {/* Cisco CLI Script Preview (Full terminal execution) */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between text-[11px] text-slate-300 font-medium">
-                    <span>{isEn ? 'Cisco IOS Commands (Running-Config):' : 'دستورات معادل در سیسکو IOS (Running-Config):'}</span>
+                    <span>{isEn ? 'Full Cisco IOS Session Script:' : 'متن کامل دستورات اجرایی در نشست سیسکو IOS:'}</span>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded vendor-badge-cisco font-bold">Cisco IOS-XE Script</span>
                   </div>
                   <pre className="p-3 rounded-xl bg-slate-950/90 border border-white/10 text-emerald-400 font-mono text-xs overflow-x-auto text-left leading-relaxed select-all" dir="ltr">
@@ -2106,22 +2269,26 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
                 </div>
               </div>
 
-              {/* Footer Actions */}
+              {/* Footer Actions with Cancel and Apply Configuration */}
               <div className="px-5 py-3.5 bg-black/20 border-t border-white/10 flex items-center justify-end gap-2.5 shrink-0">
                 <button
                   onClick={() => setShowConfirmSummary(false)}
                   disabled={isSaving}
-                  className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 text-xs font-medium transition cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 text-xs font-medium transition cursor-pointer disabled:opacity-50"
                 >
-                  {isEn ? 'Cancel & Modify' : 'انصراف و اصلاح'}
+                  {isEn ? 'Cancel' : 'انصراف'}
                 </button>
                 <button
                   onClick={handleConfirmSave}
                   disabled={isSaving}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white text-xs font-medium shadow-md transition disabled:opacity-50 cursor-pointer border border-white/10"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white text-xs font-bold shadow-lg transition disabled:opacity-50 cursor-pointer border border-emerald-400/40"
                 >
                   <Check className="w-4 h-4" />
-                  <span>{isSaving ? (isEn ? 'Applying to Switch...' : 'در حال اعمال در سوئیچ...') : (isEn ? 'Confirm & Apply' : 'تایید و اعمال تغییرات')}</span>
+                  <span>
+                    {isSaving
+                      ? (isEn ? 'Applying configuration...' : 'در حال اعمال پیکربندی...')
+                      : (isEn ? 'Apply Configuration' : 'اعمال پیکربندی')}
+                  </span>
                 </button>
               </div>
             </div>

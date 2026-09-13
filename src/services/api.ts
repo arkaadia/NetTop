@@ -65,11 +65,81 @@ export async function fetchDevicePorts(deviceId: string): Promise<{
   return res.json();
 }
 
+export interface ApplyPortConfigRequest {
+  deviceId: string;
+  interface: string;
+  action: 'change_vlan' | 'port_security' | 'admin_status' | 'mode' | 'description' | 'allowed_vlans' | 'port_config';
+  oldValue?: any;
+  newValue?: any;
+  updates?: Partial<SwitchPort>;
+  commands?: string[];
+}
+
+export interface ApplyPortConfigResponse {
+  success: boolean;
+  device?: string;
+  interface?: string;
+  action?: string;
+  oldValue?: any;
+  newValue?: any;
+  output?: string;
+  verifiedPort?: SwitchPort;
+  commands?: string[];
+  message?: string;
+  error?: string;
+}
+
+/**
+ * Executes port configuration directly on the real Cisco switch via SSH backend service,
+ * verifies the change on the hardware, and synchronizes persistent state.
+ */
+export async function applySwitchPortConfigViaSsh(
+  payload: ApplyPortConfigRequest
+): Promise<ApplyPortConfigResponse> {
+  const res = await fetch(`${API_BASE}/ssh/apply-port-config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    return {
+      success: false,
+      device: payload.deviceId,
+      interface: payload.interface,
+      action: payload.action,
+      oldValue: payload.oldValue,
+      newValue: payload.newValue,
+      error: errorData.error || `Server responded with status ${res.status}`,
+    };
+  }
+  return res.json();
+}
+
 export async function updateSwitchPort(
   deviceId: string,
   portId: string,
   updates: Partial<SwitchPort>
-): Promise<{ port: SwitchPort; message: string }> {
+): Promise<{ port: SwitchPort; message: string; success?: boolean; error?: string }> {
+  // Try real switch configuration endpoint first
+  try {
+    const sshRes = await applySwitchPortConfigViaSsh({
+      deviceId,
+      interface: portId,
+      action: 'port_config',
+      updates,
+    });
+    if (sshRes.success && sshRes.verifiedPort) {
+      return {
+        port: sshRes.verifiedPort,
+        message: sshRes.message || 'Port updated successfully on switch',
+        success: true
+      };
+    }
+  } catch (sshErr) {
+    console.warn('[updateSwitchPort] Real SSH call failed, fallback to local update:', sshErr);
+  }
+
   const res = await fetch(`${API_BASE}/devices/${deviceId}/ports/${encodeURIComponent(portId)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },

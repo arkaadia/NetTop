@@ -40,7 +40,10 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
   - کادرهای اختصاصی خاکستری برای **VLAN ID** و **Allowed VLANs** با دراپ‌داون ویلن‌های تعریف‌شده در سوئیچ، اینپوت عددی و دکمه‌های چیپ انتخاب سریع.
   - قفل شدن خاکستری (Disabled/Grayed-out) برای Allowed VLANs در حالت Access Mode طبق معماری سیسکو، و فعال‌سازی در حالت Trunk با قابلیت انتخاب تفکیکی ویلن‌ها یا `ALL (1-4094)`.
 - **ویرایش مستقیم از جدول پورت‌ها (All Switch Ports):** با کلیک روی دکمه Edit در هر سطر جدول، فرم ویرایش فعال شده و صفحه با اسکرول نرم خودکار به سمت کارت پیکربندی هدایت می‌شود.
-- **اعمال بلادرنگ و ذخیره فوری روی پورت (Apply & Save to Port):** ذخیره مستقیم تغییرات با یک کلیک یا بررسی و تایید از طریق مودال پیش‌نمایش دستورات سیسکو (CLI Diff Preview)، با به‌روزرسانی هم‌زمان در فیس‌پلیت پورت‌ها، جدول All Switch Ports و پایگاه داده بک‌اند.
+- **اتصال مستقیم تغییرات پورت به سوئیچ واقعی از طریق SSH (Real Switch Direct Configuration via SSH):**
+  - تمامی تغییرات اعمال‌شده در فرانت‌اند (تغییر VLAN ID، مد Access/Trunk، ویلن‌های مجاز Allowed VLANs، وضعیت Port Security، Admin Status و Description) مستقیماً از مسیر `Frontend -> API -> Backend -> SSH Service -> Real Cisco Switch` عبور کرده و روی اینترفیس فیزیکی سوئیچ اعمال می‌شوند.
+  - **پیش‌نمایش پیکربندی (Configuration Preview Modal):** پیش از اعمال هر کانفیگ، پنجره تاییدیه شامل مشخصات دیوایس، نام اینترفیس، مقایسه ویلن فعلی و جدید و دستورات دقیق CLI سیسکو (`interface Gi...`, `switchport access vlan ...`) به کاربر نمایش داده می‌شود.
+  - **پایداری وضعیت و عدم به‌روزرسانی زودهنگام:** کلید اعمال پیکربندی حین اجرا با وضعیت «Applying configuration...» غیرفعال شده و تنها پس از دریافت تایید موفقیت قطعی از سوئیچ واقعی، رابط کاربری به‌روزرسانی و اطلاعات مجدداً از سوئیچ بارگذاری می‌گردند؛ در صورت بروز خطا، مقادیر فرم به حالت قبل بازمی‌گردند.
 
 ### ۲. امنیت پورت لایه ۲ سیسکو (Cisco Port Security)
 - **فعال‌سازی با کلید تعاملی با کنتراست بالا:** اعمال پیکربندی `switchport port-security` روی پورت‌های اکسس.
@@ -171,7 +174,10 @@ npm start
   - Dedicated **Gray-Themed** panels for **VLAN ID** and **Allowed VLANs** featuring a dropdown selector populated with switch VLANs, numeric ID inputs, and quick-select chips.
   - **Context-Aware Allowed VLANs:** Completely disabled and styled in gray in Access Mode (following Cisco single-VLAN architecture) and unlocked in Trunk Mode with multi-VLAN toggle chips or `ALL (1-4094)` shortcuts.
 - **All Switch Ports Table Integration:** Clicking **Edit** on any port row instantly opens the configuration form and automatically executes a smooth scroll to the active edit card.
-- **Instant Port Synchronization (Apply & Save to Port):** Save port changes directly or review generated Cisco CLI diffs; changes immediately reflect on the RJ-45 faceplate vector graphic, table rows, and the backend persistence database.
+- **Real-Switch Direct Configuration via SSH:**
+  - All port configuration edits (VLAN ID, Access/Trunk mode, Allowed VLANs, Port Security parameters, Admin Status, and Description) route through `Frontend -> API -> Backend -> SSH Service -> Real Cisco Switch`, applying directly to the hardware switch interface.
+  - **Mandatory Configuration Preview Modal:** Prior to applying any changes, a confirmation dialog appears showing target device, interface identifier, current vs new proposed values, and generated Cisco IOS CLI commands (`interface Gi...`, `switchport access vlan ...`).
+  - **Reliable State Enforcement & Deferred UI Updates:** The apply action shows "Applying configuration..." with disabled buttons until the switch explicitly returns success. Upon execution failure, the UI rolls back to previous state without desynchronizing from the physical switch.
 
 ### 2. Cisco Layer-2 Port Security Management
 - **One-Touch Port Security Toggle:** Effortlessly apply `switchport port-security` with dedicated high-contrast controls.

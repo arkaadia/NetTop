@@ -7,7 +7,8 @@ import {
   testRealSshConnection,
   setupSshWebSocketServer,
   fetchRealSwitchDataViaSsh,
-  syncDeviceWithRealSwitch
+  syncDeviceWithRealSwitch,
+  applyPortConfigViaSsh
 } from './server/sshManager';
 
 // Safely determine current directory and project root in both CJS bundle and TSX ESM dev mode
@@ -197,6 +198,65 @@ app.post('/api/ssh/sync-device', async (req: Request, res: Response) => {
     });
   }
 });
+
+// Real switch port configuration endpoint (VLAN, Port Security, Admin Status, Mode, etc. via SSH)
+const handlePortConfigExecution = async (req: Request, res: Response) => {
+  try {
+    const {
+      deviceId,
+      interface: interfaceName,
+      portId,
+      action,
+      oldValue,
+      newValue,
+      updates,
+      commands,
+      host,
+      port,
+      username,
+      password,
+      enablePassword
+    } = req.body || {};
+
+    const targetInterface = interfaceName || portId || req.params.portId;
+    const targetDevice = deviceId || req.params.deviceId;
+
+    if (!targetInterface) {
+      return res.status(400).json({
+        success: false,
+        error: 'Interface ID or name is required'
+      });
+    }
+
+    console.log(`[SSH Apply Config] Executing ${action || 'config'} on ${targetDevice || 'Switch'} interface ${targetInterface}...`);
+    const result = await applyPortConfigViaSsh(projectRoot, {
+      deviceId: targetDevice,
+      interfaceName: targetInterface,
+      action: action || 'port_config',
+      oldValue,
+      newValue,
+      updates: updates || (req.body && !updates ? req.body : {}),
+      commands,
+      host,
+      port: port ? Number(port) : undefined,
+      username,
+      password,
+      enablePassword
+    });
+
+    return res.json(result);
+  } catch (err: any) {
+    console.error('[SSH Apply Config] Unexpected error:', err);
+    return res.status(500).json({
+      success: false,
+      error: `Failed to execute switch configuration: ${err.message}`
+    });
+  }
+};
+
+app.post('/api/ssh/apply-port-config', handlePortConfigExecution);
+app.post('/api/devices/:deviceId/ports/:portId/apply', handlePortConfigExecution);
+app.post('/api/switch/apply-port-config', handlePortConfigExecution);
 
 // Proxy other /api/* requests to Python HTTP server
 app.use('/api', (req: Request, res: Response) => {
