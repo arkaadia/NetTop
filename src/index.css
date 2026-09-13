@@ -266,6 +266,158 @@
   border-right-color: #38bdf8 !important;
 }
 
+/* ==========================================================================
+   Cyberpunk 2077 Neon Theme (Night City Aesthetic: Neon Yellow, Magenta & Electric Cyan)
+   ========================================================================== */
+.theme-cyberpunk {
+  --color-spatial-bg: #05050a;
+  --color-spatial-glass: rgba(12, 12, 22, 0.88);
+  --color-spatial-glass-hover: rgba(20, 20, 36, 0.95);
+  --color-spatial-glow-cyan: #00f0ff;
+  --color-spatial-glow-purple: #ff0055;
+  --color-spatial-glow-amber: #fcee0a;
+  color: #fcee0a !important;
+  background-color: #05050a !important;
+}
+
+.theme-cyberpunk .ambient-glow-background {
+  background: 
+    radial-gradient(circle at 10% 15%, rgba(252, 238, 10, 0.16) 0%, transparent 42%),
+    radial-gradient(circle at 88% 85%, rgba(255, 0, 85, 0.18) 0%, transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(0, 240, 255, 0.10) 0%, transparent 55%),
+    radial-gradient(circle at 75% 15%, rgba(255, 0, 85, 0.12) 0%, transparent 35%),
+    #05050a !important;
+}
+
+.theme-cyberpunk .spatial-glass {
+  background: rgba(10, 10, 18, 0.88) !important;
+  border-color: rgba(252, 238, 10, 0.32) !important;
+  box-shadow: 
+    0 10px 30px rgba(0, 0, 0, 0.8),
+    0 0 15px rgba(252, 238, 10, 0.14),
+    0 0 25px rgba(255, 0, 85, 0.08),
+    inset 0 1px 0 rgba(252, 238, 10, 0.25) !important;
+}
+
+.theme-cyberpunk .spatial-glass-hover:hover {
+  background: rgba(18, 18, 30, 0.95) !important;
+  border-color: #fcee0a !important;
+  box-shadow: 
+    0 20px 45px rgba(0, 0, 0, 0.9),
+    0 0 25px rgba(252, 238, 10, 0.35),
+    0 0 12px rgba(0, 240, 255, 0.3) !important;
+}
+
+.theme-cyberpunk .glow-text-cyan {
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.7), 0 0 20px rgba(0, 240, 255, 0.4) !important;
+  color: #00f0ff !important;
+}
+
+.theme-cyberpunk .glow-text-purple {
+  text-shadow: 0 0 10px rgba(255, 0, 85, 0.7), 0 0 20px rgba(255, 0, 85, 0.4) !important;
+  color: #ff0055 !important;
+}
+
+.theme-cyberpunk .pulse-glow-cyan {
+  box-shadow: 0 0 18px rgba(252, 238, 10, 0.6), 0 0 28px rgba(255, 0, 85, 0.4) !important;
+}
+
+.theme-cyberpunk .text-indigo-400 { color: #fcee0a !important; }
+.theme-cyberpunk .text-indigo-500 { color: #ffe600 !important; }
+.theme-cyberpunk .text-indigo-600 { color: #fcee0a !important; }
+.theme-cyberpunk .bg-indigo-600 { 
+  background-color: #fcee0a !important; 
+  color: #05050a !important; 
+}
+.theme-cyberpunk .bg-indigo-500 { 
+  background-color: #fcee0a !important; 
+  color: #05050a !important;
+}
+.theme-cyberpunk .border-indigo-500\/30 { border-color: rgba(252, 238, 10, 0.45) !important; }
+.theme-cyberpunk .hover\:bg-indigo-500\/10:hover { background-color: rgba(252, 238, 10, 0.15) !important; }
+
+.theme-cyberpunk .sidebar-badge.active {
+  background-color: rgba(252, 238, 10, 0.25) !important;
+  color: #fcee0a !important;
+  border-color: rgba(252, 238, 10, 0.65) !important;
+  box-shadow: 0 0 10px rgba(252, 238, 10, 0.3) !important;
+}
+
+.theme-cyberpunk .sidebar-nav-item.active {
+  background-color: rgba(252, 238, 10, 0.14) !important;
+  border-right-color: #fcee0a !important;
+  box-shadow: inset -3px 0 12px rgba(252, 238, 10, 0.25) !important;
+}
+
+.theme-cyberpunk .sidebar-nav-item.active * {
+  color: #fcee0a !important;
+}
+
+.theme-cyberpunk .cisco-terminal-screen {
+  background-color: #040409 !important;
+  color: #fcee0a !important;
+  border-color: rgba(252, 238, 10, 0.35) !important;
+  box-shadow: 0 0 25px rgba(252, 238, 10, 0.12), inset 0 0 20px rgba(0, 240, 255, 0.05) !important;
+}
+
+.theme-cyberpunk .cisco-cli-input {
+  color: #fcee0a !important;
+  caret-color: #ff0055 !important;
+  text-shadow: 0 0 8px rgba(252, 238, 10, 0.5) !important;
+}
+
+.theme-cyberpunk .cisco-cli-input::placeholder {
+  color: rgba(252, 238, 10, 0.4) !important;
+}
+
+.theme-cyberpunk .terminal-header-ip {
+  background-color: rgba(0, 240, 255, 0.15) !important;
+  color: #00f0ff !important;
+  border: 1px solid #00f0ff !important;
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.6) !important;
+}
+
+.theme-cyberpunk .terminal-header-ssh {
+  background-color: rgba(255, 0, 85, 0.2) !important;
+  color: #ff0055 !important;
+  border: 1px solid #ff0055 !important;
+  text-shadow: 0 0 8px rgba(255, 0, 85, 0.6) !important;
+}
+
+.theme-cyberpunk .cisco-terminal-header-btn {
+  background-color: #0a0a14 !important;
+  color: #fcee0a !important;
+  border: 1px solid rgba(252, 238, 10, 0.4) !important;
+  box-shadow: 0 0 10px rgba(252, 238, 10, 0.2) !important;
+}
+
+.theme-cyberpunk .cisco-terminal-header-btn:hover {
+  background-color: #141424 !important;
+  border-color: #fcee0a !important;
+  box-shadow: 0 0 15px rgba(252, 238, 10, 0.45) !important;
+}
+
+.theme-cyberpunk .cisco-terminal-header-btn svg {
+  color: #ff0055 !important;
+}
+
+.theme-cyberpunk .switch-faceplate-chassis {
+  background-color: #080812 !important;
+  border-color: rgba(252, 238, 10, 0.35) !important;
+  box-shadow: 0 0 25px rgba(252, 238, 10, 0.12) !important;
+}
+
+.theme-cyberpunk .switch-faceplate-grid {
+  background-color: #030308 !important;
+  border-color: rgba(0, 240, 255, 0.3) !important;
+}
+
+.theme-cyberpunk .fixed.bottom-6 .spatial-glass {
+  background: rgba(8, 8, 16, 0.92) !important;
+  border-color: rgba(252, 238, 10, 0.45) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 20px rgba(252, 238, 10, 0.25) !important;
+}
+
 .theme-light .sidebar-nav-item.active {
   background-color: rgba(99, 102, 241, 0.12) !important;
   color: #4338ca !important;
@@ -423,6 +575,7 @@
 .theme-rose .modal-backdrop-blur,
 .theme-amber .modal-backdrop-blur,
 .theme-cobalt .modal-backdrop-blur,
+.theme-cyberpunk .modal-backdrop-blur,
 .theme-obsidian .modal-backdrop-blur {
   background-color: rgba(2, 6, 23, 0.78) !important;
   backdrop-filter: blur(12px) !important;
@@ -1190,7 +1343,9 @@
 .theme-emerald .chart-custom-tooltip,
 .theme-rose .chart-custom-tooltip,
 .theme-amber .chart-custom-tooltip,
-.theme-cobalt .chart-custom-tooltip {
+.theme-cobalt .chart-custom-tooltip,
+.theme-cyberpunk .chart-custom-tooltip,
+.theme-cyberpunk .recharts-tooltip-wrapper .chart-custom-tooltip {
   background-color: #090d16 !important;
   border: 1px solid #334155 !important;
   border-radius: 1rem !important;

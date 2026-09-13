@@ -20,8 +20,9 @@ export const translations = {
     theme_obsidian: 'Cosmic Obsidian (Default)',
     theme_emerald: 'Cyber Emerald (Matrix)',
     theme_cobalt: 'Tech Cobalt (Oceanic)',
-    theme_rose: 'Cyberpunk Rose (Crimson)',
+    theme_rose: 'Rose Crimson (Cyber)',
     theme_amber: 'Neon Amber (Golden)',
+    theme_cyberpunk: 'Cyberpunk 2077 (Neon Yellow & Magenta)',
     theme_light: 'Clear Light (Light)',
 
     // Language
@@ -627,8 +628,9 @@ export const translations = {
     theme_obsidian: 'ابزیدین کیهانی (پیش‌فرض)',
     theme_emerald: 'امرالد سایبر (ماتریکس)',
     theme_cobalt: 'کبالت تکنولوژی (اقیانوسی)',
-    theme_rose: 'رز سایبرپانک (کریمسون)',
+    theme_rose: 'رز کریمسون (سایبر)',
     theme_amber: 'کهربایی نئون (زرین)',
+    theme_cyberpunk: 'سایبرپانک (نئون زرد و سرخابی)',
     theme_light: 'شفاف روشن (Light)',
 
     // Language

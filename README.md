@@ -81,7 +81,9 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
 - **پایش وضعیت اتصال:** نمایش وضعیت آنلاین/آفلاین بودن هر سوئیچ و روتر با پینگ و تله‌متری دوره‌ای.
 - **فیلترهای پیشرفته:** جستجوی آنی بر اساس آی‌پی، نام سوئیچ، مدل و پورت‌های فعال.
 
-### ۷. استایل مدرن شیشه‌ای تیره (Spatial Dark Glassmorphism)
+### ۷. تم‌ها و پالت‌های رنگی ماتریکس با تم اختصاصی سایبرپانک ۲۰۷۷ (Themes & Cyberpunk 2077 Palette)
+- **تم اختصاصی Cyberpunk 2077 (Night City):** پیاده‌سازی پالت اختصاصی نئون برگرفته از دنیای بازی و فیلم سایبرپانک شامل رنگ زرد قناری نئون (`#fcee0a`)، سرخابی تند (`#ff0055`)، آبی فیروزه‌ای الکتریک (`#00f0ff`) و بستر فوق تاریک با درخشش‌های هولوگرافیک، بردرهای نئونی درخشان، و استایل ویژه ترمینال و داک.
+- **تنوع تم‌های رنگی چندگانه:** ابزیدین کیهانی (Cosmic Obsidian)، امرالد ماتریکس (Cyber Emerald)، کبالت اقیانوسی (Tech Cobalt)، رز کریمسون (Rose Crimson)، کهربایی نئون (Neon Amber)، سایبرپانک ۲۰۷۷ (Cyberpunk 2077) و شفاف روشن (Clear Light).
 - تمامی پنجره‌های پاپ‌آپ و مودال‌های سیستم از افکت تیره شیشه‌ای بلور (`backdrop-filter: blur(14px)`) بهره می‌برند تا تمرکز کاربر حفظ شده و هیچ‌گونه تداخل بصری با هدر یا بدنه رخ ندهد.
 - پشتیبانی کامل از **Dark Mode** و **Light Mode** با کنتراست اصلاح‌شده و تاییدیه استانداردهای دسترس‌پذیری.
 
@@ -215,7 +217,9 @@ npm start
 - **Real-Time Health Monitoring:** Visual indicators for device reachability, uptime, and firmware versions.
 - **Fast Search & Filtering:** Filter devices by IP, model, location, or active port status.
 
-### 7. Dark Glassmorphism Modal Architecture
+### 7. Matrix Themes & Dedicated Cyberpunk 2077 Night City Palette
+- **Dedicated Cyberpunk 2077 Theme:** High-octane Night City aesthetic featuring iconic canary neon yellow (`#fcee0a`), hot neon magenta (`#ff0055`), electric cyan (`#00f0ff`), deep dark spatial carbon cards with vibrant neon borders, and custom terminal accents.
+- **Rich Theme Library:** Cosmic Obsidian (Default), Cyber Emerald (Matrix), Tech Cobalt (Oceanic), Rose Crimson (Cyber), Neon Amber (Golden), Cyberpunk 2077 (Night City), and Clear Light.
 - Universal backdrop blur (`.modal-backdrop-blur`, `backdrop-filter: blur(14px)`) ensures focus and eliminates color clashing with headers and backgrounds.
 - High-contrast accessibility compliance across both Dark and Light themes.
 
