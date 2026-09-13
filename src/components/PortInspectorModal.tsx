@@ -175,9 +175,19 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
         setSelectedPort((prev) => (prev ? { ...prev, ...updates } : null));
       }
       setConfirmModalState(null);
+      setSyncStatusMessage({
+        text: isEn
+          ? `Port ${targetPort.name || targetPort.port_id} command "${action}" executed successfully.`
+          : `دستور «${action}» روی پورت ${targetPort.name || targetPort.port_id} با موفقیت اجرا شد.`,
+        isSuccess: true,
+      });
       if (onPortUpdated) onPortUpdated();
     } catch (err: any) {
       console.error('Failed to execute command on device:', err);
+      setSyncStatusMessage({
+        text: isEn ? `Command failed: ${err.message}` : `خطا در اجرای دستور: ${err.message}`,
+        isSuccess: false,
+      });
     } finally {
       setIsExecutingConfirmAction(false);
     }
@@ -201,9 +211,19 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
         setSelectedPort((prev) => (prev ? { ...prev, ...updates } : null));
       }
       setVlanAssignModalPort(null);
+      setSyncStatusMessage({
+        text: isEn
+          ? `VLAN ${newVlan} assigned to ${targetPort.name || targetPort.port_id} successfully.`
+          : `ویلن ${newVlan} با موفقیت به پورت ${targetPort.name || targetPort.port_id} اختصاص یافت.`,
+        isSuccess: true,
+      });
       if (onPortUpdated) onPortUpdated();
     } catch (err: any) {
       console.error('Failed to assign VLAN:', err);
+      setSyncStatusMessage({
+        text: isEn ? `Failed to assign VLAN: ${err.message}` : `خطا در اختصاص ویلن: ${err.message}`,
+        isSuccess: false,
+      });
     } finally {
       setIsAssigningVlan(false);
     }
@@ -415,18 +435,49 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
       });
 
       // Update local ports
+      const updatedPort = res.port || {
+        ...selectedPort,
+        admin_status: editAdminStatus,
+        status: editAdminStatus === 'disabled' ? 'down' : 'up',
+        mode: editMode,
+        vlan: editVlan,
+        allowed_vlans: editAllowedVlans,
+        connected_device: editConnected,
+        description: editDesc,
+        port_security_enabled: editPortSecEnabled,
+        port_security_max_mac: editPortSecMaxMac,
+        port_security_mode: editPortSecMode,
+        port_security_configured_mac: editPortSecConfiguredMac,
+        port_security_violation: editPortSecViolation,
+      };
+
       setPorts((prev) =>
-        prev.map((p) => (p.port_id === selectedPort.port_id ? res.port : p))
+        prev.map((p) =>
+          p.port_id === selectedPort.port_id || p.port_id === updatedPort.port_id
+            ? updatedPort
+            : p
+        )
       );
-      setSelectedPort(res.port);
+      setSelectedPort(updatedPort);
       setIsEditing(false);
       setShowConfirmSummary(false);
       if (device) {
         device.has_unsaved_changes = true;
       }
+      setSyncStatusMessage({
+        text: isEn
+          ? `Port ${selectedPort.name || selectedPort.port_id} configuration (VLAN ${editVlan}) updated and saved.`
+          : `پیکربندی پورت ${selectedPort.name || selectedPort.port_id} (ویلن ${editVlan}) با موفقیت ذخیره و اعمال شد.`,
+        isSuccess: true,
+      });
       if (onPortUpdated) onPortUpdated();
     } catch (err: any) {
-      alert('خطا در ذخیره پیکربندی پورت: ' + err.message);
+      setSyncStatusMessage({
+        text: isEn
+          ? `Failed to update port configuration: ${err.message}`
+          : `خطا در ذخیره پیکربندی پورت: ${err.message}`,
+        isSuccess: false,
+      });
     } finally {
       setIsSaving(false);
     }

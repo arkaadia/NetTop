@@ -36,7 +36,8 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
 - **شبیه‌سازی دقیق سخت‌افزاری:** نمایش پورت‌های سوئیچ با کامپوننت گرافیکی وکتور (SVG) کانکتور شبکه RJ-45 شامل پین‌های طلایی، ضامن سوکت و پین‌اوت‌های استاندارد.
 - **چراغ‌های وضعیت LED:** پایش وضعیت فیزیکی پورت (Up، Down، Administratively Disabled) همراه با افکت‌های نوری و پالس آنلاین.
 - **نشان‌های هوشمند مود و VLAN:** تفکیک پورت‌های Access و Trunk با تگ‌های رنگی پرکنتراست و نمایش آنی شماره VLAN.
-- **تغییرات بلادرنگ پورت:** امکان ویرایش نام، وضعیت فعال/غیرفعال، جابجایی بین مدهای اکسس و ترانک، و تعیین Allowed VLANs با ارائه پیش‌نمایش تفاوت‌ها (Diff Preview) قبل از اعمال.
+- **تغییرات بلادرنگ پورت و تغییر شناسه VLAN:** امکان ویرایش نام، وضعیت فعال/غیرفعال، جابجایی بین مدهای اکسس و ترانک، و تعیین VLAN ID با اعتبارسنجی خودکار، نرمال‌سازی نام اینترفیس‌های سیسکو (مانند `TenGig0/1` و `Gi1/0/1`)، حل اسلش‌های URL-Encoded و ثبت بلادرنگ در بک‌اند پایتون و پایگاه داده.
+- **مودال تایید و اعمال تغییرات (Confirm & Apply):** پیش‌نمایش کامل تفاوت‌ها (Diff Preview) و دستورات معادل سیسکو قبل از اعمال با ثبت نشان وضعیت در حافظه موقت و اعلام وضعیت نیاز به ذخیره در NVRAM (Write Memory).
 
 ### ۲. امنیت پورت لایه ۲ سیسکو (Cisco Port Security)
 - **فعال‌سازی با کلید تعاملی با کنتراست بالا:** اعمال پیکربندی `switchport port-security` روی پورت‌های اکسس.
@@ -163,7 +164,8 @@ npm start
 - **Hardware-Accurate Visualization:** High-fidelity SVG rendering of physical 8P8C (RJ-45) modular ports with gold contacts, latch tabs, and realistic socket housing.
 - **Dynamic Port Status LEDs:** Real-time visual feedback reflecting operational states (Up, Down, Administratively Disabled) with pulsating glow effects.
 - **VLAN & Mode Indicators:** Distinct visual badges for Access vs. Trunk modes, with high-contrast VLAN tags readable in both light and dark aesthetics.
-- **Interactive Port Inspector:** One-click modal to inspect port parameters, toggle operational states, reassign VLANs, and preview configuration diffs before execution.
+- **Interactive Port Inspector & VLAN Reassignment:** One-click modal to inspect port parameters, modify VLAN ID, toggle operational states, switch between Access/Trunk modes, and preview configuration diffs before execution. Features robust URL-decoded Cisco interface name normalization (handling `TenGig0/1`, `Gi1/0/1`, etc.), dynamic port registration, and auto-registration of new VLAN pools in the backend.
+- **Confirm & Apply Interlock:** Diff confirmation summary reviewing old vs. new values and generating standard Cisco IOS commands with immediate visual status feedback and NVRAM write indicators.
 
 ### 2. Cisco Layer-2 Port Security Management
 - **One-Touch Port Security Toggle:** Effortlessly apply `switchport port-security` with dedicated high-contrast controls.

@@ -22,8 +22,8 @@
       "firmware": "Cisco IOS-XE 17.09.03",
       "last_seen": "هم اکنون (Just now)",
       "total_ports": 48,
-      "has_unsaved_changes": false,
-      "last_modified_time": "09:54:55"
+      "has_unsaved_changes": true,
+      "last_modified_time": "06:52:21"
     },
     {
       "id": "dev-router-gw",
@@ -69,7 +69,9 @@
       "snmp_community": "public",
       "firmware": "Cisco IOS-XE 17.09.02",
       "last_seen": "هم اکنون (Just now)",
-      "total_ports": 48
+      "total_ports": 48,
+      "has_unsaved_changes": true,
+      "last_modified_time": "06:52:33"
     },
     {
       "id": "dev-acc-bldg-a-f3",
@@ -219,16 +221,18 @@
         "name": "TenGigabitEthernet0/1",
         "status": "up",
         "admin_status": "enabled",
-        "mode": "trunk",
-        "vlan": 1,
-        "allowed_vlans": "1,10,20,30,50,99",
+        "mode": "access",
+        "vlan": 30,
+        "allowed_vlans": "30",
         "speed": "10 Gbps",
         "duplex": "Full",
         "connected_device": "RT-EDGE-01 (Gi0/0/0)",
         "connected_type": "Router",
         "poe_status": "n/a",
         "poe_power": 0,
-        "description": "Uplink to Edge Gateway RT-EDGE-01"
+        "description": "Uplink to Edge Gateway RT-EDGE-01",
+        "port_security_status": "disabled",
+        "port_security_learned_macs": []
       },
       {
         "port_id": "TenGig0/2",
@@ -366,15 +370,17 @@
         "status": "up",
         "admin_status": "enabled",
         "mode": "access",
-        "vlan": 20,
-        "allowed_vlans": "20",
+        "vlan": 99,
+        "allowed_vlans": "99",
         "speed": "1 Gbps",
         "duplex": "Full",
         "connected_device": "Printer-HQ-Floor2 (HP Laserjet)",
         "connected_type": "Printer",
         "poe_status": "off",
         "poe_power": 0,
-        "description": "Floor 2 Shared Printer"
+        "description": "AP Link",
+        "port_security_status": "disabled",
+        "port_security_learned_macs": []
       },
       {
         "port_id": "Gi1/0/2",
@@ -382,15 +388,17 @@
         "status": "up",
         "admin_status": "enabled",
         "mode": "access",
-        "vlan": 20,
-        "allowed_vlans": "20",
+        "vlan": 99,
+        "allowed_vlans": "99",
         "speed": "1 Gbps",
         "duplex": "Full",
         "connected_device": "Cisco IP Phone 8845 (Ext 204)",
         "connected_type": "VoIP Phone",
         "poe_status": "delivering",
         "poe_power": 7.4,
-        "description": "Finance Desk Phone"
+        "description": "Finance Desk Phone",
+        "port_security_status": "disabled",
+        "port_security_learned_macs": []
       }
     ],
     "dev-acc-bldg-a-f3": [

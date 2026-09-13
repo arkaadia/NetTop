@@ -227,6 +227,7 @@ app.use('/api', (req: Request, res: Response) => {
 
   if (req.body && Object.keys(req.body).length > 0) {
     const bodyData = JSON.stringify(req.body);
+    proxyReq.setHeader('Content-Type', 'application/json; charset=utf-8');
     proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
     proxyReq.write(bodyData);
   }

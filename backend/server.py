@@ -5,6 +5,8 @@ import time
 import socket
 import threading
 import uuid
+import re
+import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
@@ -906,6 +908,141 @@ def test_device_connection(ip):
 
     return results
 
+def normalize_cisco_intf(name: str) -> str:
+    """Normalize Cisco interface names (e.g. TenGigabitEthernet0/1 -> te0/1, GigabitEthernet1/0/1 -> gi1/0/1)."""
+    if not name:
+        return ""
+    n = str(name).lower().strip().replace(" ", "")
+    n = re.sub(r"^tengigabitethernet", "te", n)
+    n = re.sub(r"^tengig", "te", n)
+    n = re.sub(r"^gigabitethernet", "gi", n)
+    n = re.sub(r"^gig", "gi", n)
+    n = re.sub(r"^fastethernet", "fa", n)
+    n = re.sub(r"^ethernet", "eth", n)
+    return n
+
+def find_port_in_list(ports: list, target_id: str):
+    """Find a port in ports list using exact, case-insensitive, or Cisco interface abbreviation matching."""
+    if not target_id or not ports:
+        return None
+    raw_str = urllib.parse.unquote(str(target_id)).strip()
+
+    # 1. Exact match on port_id or name
+    for p in ports:
+        if p.get("port_id") == raw_str or p.get("name") == raw_str:
+            return p
+
+    # 2. Case-insensitive match
+    raw_lower = raw_str.lower()
+    for p in ports:
+        if p.get("port_id", "").lower() == raw_lower or p.get("name", "").lower() == raw_lower:
+            return p
+
+    # 3. Cisco interface abbreviation normalization
+    norm_target = normalize_cisco_intf(raw_str)
+    for p in ports:
+        p_id = normalize_cisco_intf(p.get("port_id", ""))
+        p_name = normalize_cisco_intf(p.get("name", ""))
+        if p_id == norm_target or p_name == norm_target:
+            return p
+
+    # 4. Partial substring or suffix match (e.g. '1/0/1' in 'GigabitEthernet1/0/1')
+    if "/" in raw_str:
+        slash_part = raw_str.split("/")[-2:]
+        suffix = "/".join(slash_part).lower()
+        for p in ports:
+            p_id = p.get("port_id", "").lower()
+            p_name = p.get("name", "").lower()
+            if p_id.endswith(suffix) or p_name.endswith(suffix):
+                return p
+
+    return None
+
+def apply_port_updates_to_dict(port: dict, body: dict, data: dict, dev_id: str):
+    """Apply updates to a single port dictionary and sync VLANs & device unsaved state."""
+    if "admin_status" in body:
+        port["admin_status"] = body["admin_status"]
+        if body["admin_status"] == "disabled":
+            port["status"] = "down"
+    if "status" in body and port.get("admin_status") != "disabled":
+        port["status"] = body["status"]
+    if "mode" in body:
+        port["mode"] = body["mode"]  # "trunk" or "access"
+    if "vlan" in body:
+        try:
+            vlan_num = int(body["vlan"])
+            port["vlan"] = vlan_num
+            # If in access mode, sync allowed_vlans to match this vlan
+            if port.get("mode") == "access":
+                port["allowed_vlans"] = str(vlan_num)
+            # Ensure VLAN is registered in data["vlans"]
+            vlans = data.setdefault("vlans", [])
+            if not any(v.get("id") == vlan_num for v in vlans):
+                vlans.append({
+                    "id": vlan_num,
+                    "name": f"VLAN_{vlan_num}",
+                    "subnet": f"10.{vlan_num}.{vlan_num}.0/24",
+                    "color": "#3b82f6"
+                })
+        except (ValueError, TypeError):
+            pass
+    if "allowed_vlans" in body:
+        port["allowed_vlans"] = str(body["allowed_vlans"])
+    if "speed" in body:
+        port["speed"] = body["speed"]
+    if "duplex" in body:
+        port["duplex"] = body["duplex"]
+    if "connected_device" in body:
+        port["connected_device"] = body["connected_device"]
+    if "connected_type" in body:
+        port["connected_type"] = body["connected_type"]
+    if "description" in body:
+        port["description"] = body["description"]
+    if "poe_status" in body:
+        port["poe_status"] = body["poe_status"]
+    if "poe_power" in body:
+        try:
+            port["poe_power"] = float(body["poe_power"])
+        except (ValueError, TypeError):
+            pass
+
+    # Cisco Port Security
+    if "port_security_enabled" in body:
+        port["port_security_enabled"] = bool(body["port_security_enabled"])
+    if "port_security_max_mac" in body:
+        try:
+            port["port_security_max_mac"] = int(body["port_security_max_mac"])
+        except (ValueError, TypeError):
+            pass
+    if "port_security_mode" in body:
+        port["port_security_mode"] = body["port_security_mode"]
+    if "port_security_configured_mac" in body:
+        port["port_security_configured_mac"] = str(body["port_security_configured_mac"]).strip()
+    if "port_security_violation" in body:
+        port["port_security_violation"] = body["port_security_violation"]
+    if "port_security_status" in body:
+        port["port_security_status"] = body["port_security_status"]
+    elif port.get("port_security_enabled"):
+        port["port_security_status"] = "secure-up" if port.get("status") == "up" else "secure-down"
+    else:
+        port["port_security_status"] = "disabled"
+
+    if port.get("port_security_enabled"):
+        if port.get("port_security_mode") == "sticky":
+            if not port.get("port_security_learned_macs") and port.get("connected_device") and port.get("status") == "up":
+                port["port_security_learned_macs"] = ["0050.56b2.3c4d"]
+        elif port.get("port_security_mode") == "configured":
+            if port.get("port_security_configured_mac"):
+                port["port_security_learned_macs"] = [port["port_security_configured_mac"]]
+    else:
+        port["port_security_learned_macs"] = []
+
+    # Mark device as having unsaved running-config changes (needs write memory)
+    device = next((d for d in data.get("devices", []) if d["id"] == dev_id), None)
+    if device:
+        device["has_unsaved_changes"] = True
+        device["last_modified_time"] = time.strftime("%H:%M:%S")
+
 # HTTP Request Handler
 class NetworkAPIHandler(BaseHTTPRequestHandler):
     def _send_cors_headers(self):
@@ -934,6 +1071,120 @@ class NetworkAPIHandler(BaseHTTPRequestHandler):
         self._send_cors_headers()
         self.end_headers()
         self.wfile.write(json.dumps(payload, ensure_ascii=False).encode('utf-8'))
+
+    def _handle_port_update(self, path: str, body: dict, data: dict):
+        sub = path[len("/api/devices/"):]
+        if "/ports/" in sub:
+            dev_id, raw_port_path = sub.split("/ports/", 1)
+            port_id = urllib.parse.unquote(raw_port_path).strip()
+        elif sub.endswith("/ports"):
+            dev_id = sub[:-len("/ports")].strip("/")
+            port_id = ""
+        else:
+            dev_id = sub.split("/")[0]
+            port_id = ""
+
+        # Batch update: /api/devices/:dev_id/ports/batch or body containing port_ids
+        if port_id == "batch" or (isinstance(body, dict) and "port_ids" in body and "updates" in body):
+            ports = data.setdefault("ports", {}).setdefault(dev_id, [])
+            port_ids = body.get("port_ids", [])
+            updates = body.get("updates", {})
+            updated_ports = []
+            for pid in port_ids:
+                p = find_port_in_list(ports, pid)
+                if p:
+                    apply_port_updates_to_dict(p, updates, data, dev_id)
+                    updated_ports.append(p)
+            save_data(data)
+            self._send_json(200, {
+                "success": True,
+                "updatedCount": len(updated_ports),
+                "ports": updated_ports,
+                "message": f"تعداد {len(updated_ports)} پورت با موفقیت به‌روزرسانی شد."
+            })
+            return
+
+        # Single port update: /api/devices/:dev_id/ports/:port_id
+        ports = data.setdefault("ports", {}).setdefault(dev_id, [])
+        device = next((d for d in data.get("devices", []) if d["id"] == dev_id), None)
+
+        # Auto-initialize ports if empty and device exists
+        if not ports and device:
+            total = device.get("total_ports", 24)
+            for i in range(1, total + 1):
+                p_status = "up" if i <= 4 else ("down" if i % 3 == 0 else "up")
+                ports.append({
+                    "port_id": f"Gi1/0/{i}",
+                    "name": f"GigabitEthernet1/0/{i}",
+                    "status": p_status,
+                    "admin_status": "enabled",
+                    "mode": "trunk" if i <= 2 else "access",
+                    "vlan": 1 if i <= 2 else ((i % 4 + 1) * 10),
+                    "allowed_vlans": "1,10,20,30,50" if i <= 2 else str((i % 4 + 1) * 10),
+                    "speed": "1 Gbps",
+                    "duplex": "Full",
+                    "connected_device": f"Client-PC-{i}" if p_status == "up" else "Disconnected",
+                    "connected_type": "Host" if p_status == "up" else "None",
+                    "poe_status": "delivering" if (i % 2 == 1 and p_status == "up") else "off",
+                    "poe_power": 15.4 if (i % 2 == 1 and p_status == "up") else 0,
+                    "description": f"Access Port Gi1/0/{i}"
+                })
+
+        port = find_port_in_list(ports, port_id)
+        if not port:
+            if device:
+                # Dynamically register the port if device exists
+                port = {
+                    "port_id": port_id,
+                    "name": port_id,
+                    "status": "up",
+                    "admin_status": "enabled",
+                    "mode": "access",
+                    "vlan": 1,
+                    "allowed_vlans": "1",
+                    "speed": "1 Gbps",
+                    "duplex": "Full",
+                    "connected_device": "",
+                    "connected_type": "Host",
+                    "poe_status": "n/a",
+                    "poe_power": 0,
+                    "description": f"Port {port_id}"
+                }
+                ports.append(port)
+            else:
+                self._send_json(404, {"error": f"Port '{port_id}' or device '{dev_id}' not found"})
+                return
+
+        apply_port_updates_to_dict(port, body, data, dev_id)
+        save_data(data)
+
+        # Build CLI commands preview
+        cli_commands = [
+            f"interface {port.get('name') or port.get('port_id')}",
+            f"description {port.get('description', '')}" if port.get('description') else None,
+            f"switchport mode {port.get('mode', 'access')}",
+            f"switchport access vlan {port.get('vlan', 1)}" if port.get('mode') == 'access' else None,
+            f"switchport trunk allowed vlan {port.get('allowed_vlans')}" if port.get('mode') == 'trunk' and port.get('allowed_vlans') else None,
+            "shutdown" if port.get('admin_status') == 'disabled' else "no shutdown",
+        ]
+        if port.get("port_security_enabled"):
+            cli_commands.extend([
+                "switchport port-security",
+                f"switchport port-security maximum {port.get('port_security_max_mac', 1)}",
+                f"switchport port-security violation {port.get('port_security_violation', 'shutdown')}",
+            ])
+            if port.get("port_security_mode") == "sticky":
+                cli_commands.append("switchport port-security mac-address sticky")
+            elif port.get("port_security_mode") == "configured" and port.get("port_security_configured_mac"):
+                cli_commands.append(f"switchport port-security mac-address {port.get('port_security_configured_mac')}")
+
+        active_cmds = [c for c in cli_commands if c]
+
+        self._send_json(200, {
+            "port": port,
+            "message": f"پیکربندی پورت {port.get('port_id')} با موفقیت به‌روزرسانی شد.",
+            "commands": active_cmds
+        })
 
     def do_GET(self):
         url = urlparse(self.path)
@@ -968,9 +1219,15 @@ class NetworkAPIHandler(BaseHTTPRequestHandler):
             return
 
         if path.startswith("/api/devices/") and "/ports" in path:
-            # /api/devices/:id/ports
-            parts = path.split("/")
-            dev_id = parts[3]
+            # /api/devices/:id/ports or /api/devices/:id/ports/:port_id
+            sub = path[len("/api/devices/"):]
+            if "/ports/" in sub:
+                dev_id, raw_port = sub.split("/ports/", 1)
+                port_id = urllib.parse.unquote(raw_port).strip()
+            else:
+                dev_id = sub.replace("/ports", "").strip("/")
+                port_id = None
+
             device = next((d for d in data["devices"] if d["id"] == dev_id), None)
             if not device:
                 self._send_json(404, {"error": "Device not found"})
@@ -1005,9 +1262,18 @@ class NetworkAPIHandler(BaseHTTPRequestHandler):
                         "port_security_status": ("secure-up" if p_status == "up" else "secure-down") if (i > 2 and i % 2 == 1) else "disabled",
                         "port_security_learned_macs": [f"0050.56a1.{i:02x}fe"] if (i > 2 and i % 2 == 1 and p_status == "up") else []
                     })
-                data["ports"][dev_id] = generated
+                data.setdefault("ports", {})[dev_id] = generated
                 save_data(data)
                 ports = generated
+
+            if port_id and port_id != "batch":
+                p = find_port_in_list(ports, port_id)
+                if p:
+                    self._send_json(200, {"port": p})
+                    return
+                else:
+                    self._send_json(404, {"error": f"Port '{port_id}' not found"})
+                    return
 
             self._send_json(200, {
                 "device": device,
@@ -1547,6 +1813,10 @@ class NetworkAPIHandler(BaseHTTPRequestHandler):
                 })
             return
 
+        if path.startswith("/api/devices/") and "/ports" in path:
+            self._handle_port_update(path, body, data)
+            return
+
         self._send_json(404, {"error": "Endpoint not found"})
 
     def do_PUT(self):
@@ -1555,73 +1825,8 @@ class NetworkAPIHandler(BaseHTTPRequestHandler):
         body = self._read_body()
         data = load_data()
 
-        if path.startswith("/api/devices/") and "/ports/" in path:
-            # /api/devices/:dev_id/ports/:port_id
-            parts = path.split("/")
-            dev_id = parts[3]
-            port_id = parts[5]
-
-            ports = data.get("ports", {}).get(dev_id, [])
-            port = next((p for p in ports if p["port_id"] == port_id or p["name"] == port_id), None)
-            if not port:
-                self._send_json(404, {"error": "Port not found"})
-                return
-
-            # Update port properties (admin_status, status, mode, vlan, allowed_vlans, speed, description)
-            if "admin_status" in body:
-                port["admin_status"] = body["admin_status"]
-                if body["admin_status"] == "disabled":
-                    port["status"] = "down"
-            if "status" in body and port.get("admin_status") != "disabled":
-                port["status"] = body["status"]
-            if "mode" in body:
-                port["mode"] = body["mode"]  # "trunk" or "access"
-            if "vlan" in body:
-                port["vlan"] = int(body["vlan"])
-            if "allowed_vlans" in body:
-                port["allowed_vlans"] = str(body["allowed_vlans"])
-            if "speed" in body:
-                port["speed"] = body["speed"]
-            if "connected_device" in body:
-                port["connected_device"] = body["connected_device"]
-            if "description" in body:
-                port["description"] = body["description"]
-            if "port_security_enabled" in body:
-                port["port_security_enabled"] = bool(body["port_security_enabled"])
-            if "port_security_max_mac" in body:
-                port["port_security_max_mac"] = int(body["port_security_max_mac"])
-            if "port_security_mode" in body:
-                port["port_security_mode"] = body["port_security_mode"]
-            if "port_security_configured_mac" in body:
-                port["port_security_configured_mac"] = str(body["port_security_configured_mac"]).strip()
-            if "port_security_violation" in body:
-                port["port_security_violation"] = body["port_security_violation"]
-            if "port_security_status" in body:
-                port["port_security_status"] = body["port_security_status"]
-            elif port.get("port_security_enabled"):
-                port["port_security_status"] = "secure-up" if port.get("status") == "up" else "secure-down"
-            else:
-                port["port_security_status"] = "disabled"
-
-            # Automatically manage learned MACs for sticky/configured
-            if port.get("port_security_enabled"):
-                if port.get("port_security_mode") == "sticky":
-                    if not port.get("port_security_learned_macs") and port.get("connected_device") and port.get("status") == "up":
-                        port["port_security_learned_macs"] = ["0050.56b2.3c4d"]
-                elif port.get("port_security_mode") == "configured":
-                    if port.get("port_security_configured_mac"):
-                        port["port_security_learned_macs"] = [port["port_security_configured_mac"]]
-            else:
-                port["port_security_learned_macs"] = []
-
-            # Mark device as having unsaved running-config changes (needs write memory)
-            device = next((d for d in data["devices"] if d["id"] == dev_id), None)
-            if device:
-                device["has_unsaved_changes"] = True
-                device["last_modified_time"] = time.strftime("%H:%M:%S")
-
-            save_data(data)
-            self._send_json(200, {"port": port, "message": f"پیکربندی پورت {port_id} با موفقیت به‌روزرسانی شد."})
+        if path.startswith("/api/devices/") and "/ports" in path:
+            self._handle_port_update(path, body, data)
             return
 
         if path.startswith("/api/devices/"):
