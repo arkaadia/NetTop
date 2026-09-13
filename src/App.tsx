@@ -13,6 +13,8 @@ import { CiscoTerminalModal } from './components/CiscoTerminalModal';
 import { RealSshTerminalModal } from './components/RealSshTerminalModal';
 import { ApplyTemplateModal } from './components/ApplyTemplateModal';
 import { ReleaseNotesModal } from './components/ReleaseNotesModal';
+import { LanScannerModal } from './components/LanScannerModal';
+import { WindowsInstallerModal } from './components/WindowsInstallerModal';
 import { APP_VERSION } from './version';
 import { Device, TopologyData } from './types';
 import {
@@ -75,6 +77,8 @@ export default function App() {
   const [applyTemplateDevice, setApplyTemplateDevice] = useState<Device | null>(null);
   const [applyPreselectedTemplateId, setApplyPreselectedTemplateId] = useState<string | undefined>(undefined);
   const [isReleaseNotesOpen, setIsReleaseNotesOpen] = useState(false);
+  const [isLanScannerOpen, setIsLanScannerOpen] = useState(false);
+  const [isWindowsInstallerOpen, setIsWindowsInstallerOpen] = useState(false);
 
   // Fullscreen Topology Mode (Hides Navbar header, sidebar, and footer for 100% canvas view)
   const [isTopologyFullscreen, setIsTopologyFullscreen] = useState(false);
@@ -279,6 +283,8 @@ export default function App() {
           panelTheme={panelTheme}
           onChangeTheme={changeTheme}
           onOpenReleaseNotes={() => setIsReleaseNotesOpen(true)}
+          onOpenLanScanner={() => setIsLanScannerOpen(true)}
+          onOpenWindowsInstaller={() => setIsWindowsInstallerOpen(true)}
         />
       )}
 
@@ -331,6 +337,8 @@ export default function App() {
               onWriteMemory={handleWriteMemory}
               onRefreshAll={handleRefreshAll}
               isRefreshing={isRefreshing}
+              onOpenLanScanner={() => setIsLanScannerOpen(true)}
+              onOpenWindowsInstaller={() => setIsWindowsInstallerOpen(true)}
             />
           )}
 
@@ -467,6 +475,46 @@ export default function App() {
       <ReleaseNotesModal
         isOpen={isReleaseNotesOpen}
         onClose={() => setIsReleaseNotesOpen(false)}
+      />
+
+      {/* LAN Subnet Scanner Modal */}
+      <LanScannerModal
+        isOpen={isLanScannerOpen}
+        onClose={() => setIsLanScannerOpen(false)}
+        onDeviceImported={(dev) => {
+          loadData();
+          showToast(`دستگاه ${dev.name} با موفقیت به توپولوژی اضافه گردید`);
+        }}
+        onOpenTerminalForIp={(ip, name) => {
+          const match = devices.find((d) => d.ip === ip);
+          if (match) {
+            setTerminalDevice(match);
+          } else {
+            setTerminalDevice({
+              id: `temp-${ip}`,
+              name: name || `Switch-${ip}`,
+              ip: ip,
+              type: 'switch',
+              role: 'Access Switch',
+              model: 'Cisco Switch',
+              mac: '00:00:00:00:00:00',
+              building: '',
+              floor: '',
+              unit: '',
+              is_online: true,
+              cdp_enabled: true,
+              lldp_enabled: true,
+              total_ports: 24,
+              ssh_port: 22
+            });
+          }
+        }}
+      />
+
+      {/* Windows Python Setup & Installer Modal */}
+      <WindowsInstallerModal
+        isOpen={isWindowsInstallerOpen}
+        onClose={() => setIsWindowsInstallerOpen(false)}
       />
     </div>
   );

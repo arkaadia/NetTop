@@ -327,4 +327,77 @@ export async function syncDeviceWithRealSwitch(params: {
   return res.json();
 }
 
+// Python Switch Engine & Automation Endpoints
+export async function getPythonStatus(): Promise<import('../types').PythonEngineStatus> {
+  const res = await fetch(`${API_BASE}/system/python-status`);
+  if (!res.ok) throw new Error('Failed to fetch Python engine status');
+  return res.json();
+}
+
+export const fetchPythonStatus = getPythonStatus;
+
+export async function testSwitchConnection(
+  ip: string,
+  port = 22
+): Promise<{ reachable: boolean; ip: string; port: number; latency_ms?: number; message: string }> {
+  const res = await fetch(`${API_BASE}/switch/test-connection`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ip, port }),
+  });
+  if (!res.ok) throw new Error('Failed to test switch connectivity');
+  return res.json();
+}
+
+export async function executeSwitchCommand(
+  params: import('../types').SwitchExecutionParams
+): Promise<import('../types').SwitchExecutionResult> {
+  const res = await fetch(`${API_BASE}/switch/execute`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw new Error('Failed to execute command via Python engine');
+  return res.json();
+}
+
+export async function scanLanSubnet(
+  paramsOrSubnet: string | { subnet?: string; ports?: number[]; timeout?: number } = '192.168.1.0/24',
+  portsParam = [22, 23, 80, 443],
+  timeoutParam = 0.6
+): Promise<import('../types').LanScanResult> {
+  let subnet = '192.168.1.0/24';
+  let ports = portsParam;
+  let timeout = timeoutParam;
+
+  if (typeof paramsOrSubnet === 'object' && paramsOrSubnet !== null) {
+    if (paramsOrSubnet.subnet) subnet = paramsOrSubnet.subnet;
+    if (paramsOrSubnet.ports) ports = paramsOrSubnet.ports;
+    if (paramsOrSubnet.timeout) timeout = paramsOrSubnet.timeout;
+  } else if (typeof paramsOrSubnet === 'string') {
+    subnet = paramsOrSubnet;
+  }
+
+  const res = await fetch(`${API_BASE}/network/scan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ subnet, ports, timeout }),
+  });
+  if (!res.ok) throw new Error('Failed to scan LAN subnet');
+  return res.json();
+}
+
+export async function importScannedDevice(
+  device: import('../types').LanScanDevice
+): Promise<{ device: import('../types').Device; message: string; already_existed: boolean }> {
+  const res = await fetch(`${API_BASE}/network/import-scanned`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ device }),
+  });
+  if (!res.ok) throw new Error('Failed to import scanned device');
+  return res.json();
+}
+
+
 

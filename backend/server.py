@@ -25,6 +25,21 @@ except ImportError:
         extract_device_configuration_and_parameterize
     )
 
+try:
+    from backend.switch_engine import (
+        get_engine_status,
+        execute_switch_command,
+        test_socket_connectivity,
+        scan_lan_subnet
+    )
+except ImportError:
+    from switch_engine import (
+        get_engine_status,
+        execute_switch_command,
+        test_socket_connectivity,
+        scan_lan_subnet
+    )
+
 # Data file path
 DATA_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(DATA_DIR, "network_data.json")
@@ -935,6 +950,14 @@ class NetworkAPIHandler(BaseHTTPRequestHandler):
             })
             return
 
+        if path == "/api/system/python-status":
+            try:
+                status = get_engine_status()
+                self._send_json(200, status)
+            except Exception as e:
+                self._send_json(500, {"error": str(e), "engine": "Python"})
+            return
+
         if path == "/api/devices":
             self._send_json(200, {
                 "devices": data["devices"],
@@ -1118,6 +1141,99 @@ class NetworkAPIHandler(BaseHTTPRequestHandler):
         path = url.path
         body = self._read_body()
         data = load_data()
+
+        if path == "/api/switch/test-connection":
+            ip = body.get("ip", "127.0.0.1")
+            port = int(body.get("port", 22))
+            res = test_socket_connectivity(ip, port)
+            self._send_json(200, res)
+            return
+
+        if path == "/api/switch/execute":
+            res = execute_switch_command(body)
+            self._send_json(200, res)
+            return
+
+        if path == "/api/network/scan":
+            subnet = body.get("subnet", "192.168.1.0/24")
+            ports = body.get("ports", [22, 23, 80, 443])
+            timeout = float(body.get("timeout", 0.6))
+            res = scan_lan_subnet(subnet, ports=ports, timeout_sec=timeout)
+            self._send_json(200, res)
+            return
+
+        if path == "/api/network/import-scanned":
+            dev_data = body.get("device", {})
+            dev_ip = dev_data.get("ip", "").strip()
+            if not dev_ip:
+                self._send_json(400, {"error": "IP address is required"})
+                return
+
+            existing = next((d for d in data["devices"] if d.get("ip") == dev_ip), None)
+            if existing:
+                self._send_json(200, {
+                    "device": existing,
+                    "message": f"دستگاه با آی‌پی {dev_ip} قبلاً در توپولوژی وجود دارد.",
+                    "already_existed": True
+                })
+                return
+
+            new_id = f"dev-scan-{uuid.uuid4().hex[:6]}"
+            new_dev = {
+                "id": new_id,
+                "name": dev_data.get("hostname") or f"SW-{dev_ip.split('.')[-1]}",
+                "ip": dev_ip,
+                "type": dev_data.get("device_type", "switch"),
+                "role": dev_data.get("role", "Access Switch"),
+                "model": "Cisco Catalyst 2960X",
+                "mac": "00:50:56:" + ":".join([f"{uuid.uuid4().int % 255:02X}" for _ in range(3)]),
+                "building": "ساختمان شبکه (Network Bldg)",
+                "floor": "طبقه ۱ (Floor 1)",
+                "unit": "اتاق ارتباطات (Telecom)",
+                "rack": "Rack-LAN",
+                "is_online": True,
+                "latency_ms": dev_data.get("latency_ms", 1.2),
+                "packet_loss": 0,
+                "uptime": "Discovered via LAN Scan",
+                "cdp_enabled": True,
+                "lldp_enabled": True,
+                "snmp_community": "public",
+                "firmware": "Cisco IOS-XE",
+                "last_seen": "هم اکنون (Just now)",
+                "total_ports": 24,
+                "ssh_port": 22 if 22 in dev_data.get("open_ports", []) else 23
+            }
+            data["devices"].append(new_dev)
+            ports_list = []
+            for i in range(1, 25):
+                p_id = f"GigabitEthernet1/0/{i}"
+                ports_list.append({
+                    "port_id": p_id,
+                    "name": p_id,
+                    "status": "up" if i <= 4 else "down",
+                    "admin_status": "enabled",
+                    "mode": "trunk" if i == 24 else "access",
+                    "vlan": 1 if i != 24 else 1,
+                    "allowed_vlans": "1-4094" if i == 24 else "1",
+                    "speed": "1000Mbps",
+                    "duplex": "Full",
+                    "connected_device": "Link to Core" if i == 24 else ("Connected Host" if i <= 4 else "None"),
+                    "connected_type": "Switch" if i == 24 else ("Host" if i <= 4 else "None"),
+                    "poe_status": "delivering" if i <= 4 else "n/a",
+                    "poe_power": 15.4 if i <= 4 else 0,
+                    "description": f"Port {i} - Auto-discovered"
+                })
+            if "ports" not in data:
+                data["ports"] = {}
+            data["ports"][new_id] = ports_list
+            save_data(data)
+
+            self._send_json(201, {
+                "device": new_dev,
+                "message": f"دستگاه {new_dev['name']} با موفقیت به توپولوژی اضافه گردید.",
+                "already_existed": False
+            })
+            return
 
         if path == "/api/devices":
             # Introduce new switch, router, or AP

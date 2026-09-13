@@ -18,7 +18,9 @@ import {
   AlertTriangle,
   Save,
   FileCode2,
-  MoreVertical
+  MoreVertical,
+  Radar,
+  Laptop
 } from 'lucide-react';
 import { Device, DeviceType } from '../types';
 import { useLanguage } from '../i18n';
@@ -35,6 +37,8 @@ interface DeviceListViewProps {
   onWriteMemory?: (deviceId: string) => Promise<void>;
   onRefreshAll: () => void;
   isRefreshing: boolean;
+  onOpenLanScanner?: () => void;
+  onOpenWindowsInstaller?: () => void;
 }
 
 export const DeviceListView: React.FC<DeviceListViewProps> = ({
@@ -48,6 +52,8 @@ export const DeviceListView: React.FC<DeviceListViewProps> = ({
   onWriteMemory,
   onRefreshAll,
   isRefreshing,
+  onOpenLanScanner,
+  onOpenWindowsInstaller,
 }) => {
   const { t, isRtl, isEn } = useLanguage();
   const [search, setSearch] = useState('');
@@ -123,7 +129,29 @@ export const DeviceListView: React.FC<DeviceListViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {onOpenLanScanner && (
+            <button
+              onClick={onOpenLanScanner}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-medium shadow-xs transition active:scale-95 cursor-pointer"
+              title="اسکن خودکار ساب‌نت و کشف سوئیچ‌های شبکه محلی"
+            >
+              <Radar className="w-3.5 h-3.5 text-cyan-400" />
+              <span>{isEn ? 'Scan LAN Subnet' : 'اسکن ساب‌نت شبکه'}</span>
+            </button>
+          )}
+
+          {onOpenWindowsInstaller && (
+            <button
+              onClick={onOpenWindowsInstaller}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-medium shadow-xs transition active:scale-95 cursor-pointer"
+              title="راهنمای نصب پایتون و ابزارها برای ویندوز"
+            >
+              <Laptop className="w-3.5 h-3.5 text-indigo-400" />
+              <span>{isEn ? 'Windows Setup' : 'نصب ویندوز'}</span>
+            </button>
+          )}
+
           <button
             onClick={onRefreshAll}
             disabled={isRefreshing}

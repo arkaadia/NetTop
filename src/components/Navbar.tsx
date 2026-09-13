@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { RefreshCw, Zap, Palette, ChevronDown, Check, Globe, User, ShieldCheck, FileText } from 'lucide-react';
+import { RefreshCw, Zap, Palette, ChevronDown, Check, Globe, User, ShieldCheck, FileText, Radar, Laptop } from 'lucide-react';
 import { APP_VERSION } from '../version';
 import { useLanguage } from '../i18n';
 
@@ -16,6 +16,8 @@ interface NavbarProps {
   panelTheme: ThemeType;
   onChangeTheme: (theme: ThemeType) => void;
   onOpenReleaseNotes?: () => void;
+  onOpenLanScanner?: () => void;
+  onOpenWindowsInstaller?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -27,6 +29,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   panelTheme,
   onChangeTheme,
   onOpenReleaseNotes,
+  onOpenLanScanner,
+  onOpenWindowsInstaller,
 }) => {
   const { t, language, setLanguage, isRtl, isEn } = useLanguage();
   const [profileOpen, setProfileOpen] = useState(false);
@@ -246,7 +250,36 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </div>
                 </div>
 
-                {/* Section 3: Release Notes & System Status Link */}
+                {/* Section 3: LAN Scanner & Windows Installer Tools */}
+                <div className="mb-3 pt-2 border-t border-white/10 space-y-1">
+                  {onOpenLanScanner && (
+                    <button
+                      onClick={() => {
+                        setProfileOpen(false);
+                        onOpenLanScanner();
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs text-slate-200 hover:text-white hover:bg-cyan-500/20 border border-transparent hover:border-cyan-500/30 transition cursor-pointer"
+                    >
+                      <Radar className="w-3.5 h-3.5 text-cyan-400" />
+                      <span className="font-medium">اسکنر ساب‌نت شبکه (LAN Scan)</span>
+                    </button>
+                  )}
+
+                  {onOpenWindowsInstaller && (
+                    <button
+                      onClick={() => {
+                        setProfileOpen(false);
+                        onOpenWindowsInstaller();
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs text-slate-200 hover:text-white hover:bg-indigo-500/20 border border-transparent hover:border-indigo-500/30 transition cursor-pointer"
+                    >
+                      <Laptop className="w-3.5 h-3.5 text-indigo-400" />
+                      <span className="font-medium">نصب‌کننده ویندوز (Windows Setup)</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Section 4: Release Notes & System Status Link */}
                 <div className="pt-2 border-t border-white/10 flex items-center justify-between">
                   <button
                     onClick={() => {

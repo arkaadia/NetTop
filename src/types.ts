@@ -275,3 +275,54 @@ export interface DeviceConfigExtractResult {
   description: string;
   logs: string[];
 }
+
+export interface PythonEngineStatus {
+  python_version: string;
+  platform: string;
+  netmiko_installed: boolean;
+  paramiko_installed: boolean;
+  requests_installed: boolean;
+  recommended_action?: string;
+}
+
+export interface SwitchExecutionParams {
+  ip: string;
+  port?: number;
+  username?: string;
+  password?: string;
+  secret?: string;
+  command: string;
+  device_type?: string;
+  config_mode?: boolean;
+  timeout?: number;
+}
+
+export interface SwitchExecutionResult {
+  success: boolean;
+  output: string;
+  driver?: string;
+  execution_time_ms: number;
+  error?: string;
+}
+
+export interface LanScanDevice {
+  ip: string;
+  hostname: string;
+  mac?: string;
+  open_ports: number[];
+  device_type: 'switch' | 'router' | 'host' | 'unknown';
+  role: string;
+  is_online?: boolean;
+  latency_ms: number;
+}
+
+export interface LanScanResult {
+  success?: boolean;
+  error?: string;
+  subnet: string;
+  total_scanned: number;
+  alive_count: number;
+  scan_duration_sec: number;
+  devices: LanScanDevice[];
+}
+

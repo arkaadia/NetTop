@@ -37,7 +37,8 @@ function startPythonBackend() {
   const pythonScript = path.join(projectRoot, 'backend', 'server.py');
   console.log(`[Python Manager] Starting Python backend from ${pythonScript} on port ${PYTHON_PORT}...`);
   
-  pythonProcess = spawn('python3', [pythonScript, String(PYTHON_PORT)], {
+  const pythonCmd = process.env.PYTHON_CMD || (process.platform === 'win32' ? 'python' : 'python3');
+  pythonProcess = spawn(pythonCmd, [pythonScript, String(PYTHON_PORT)], {
     cwd: projectRoot,
     stdio: 'inherit',
     env: {
