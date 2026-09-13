@@ -36,8 +36,11 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
 - **شبیه‌سازی دقیق سخت‌افزاری:** نمایش پورت‌های سوئیچ با کامپوننت گرافیکی وکتور (SVG) کانکتور شبکه RJ-45 شامل پین‌های طلایی، ضامن سوکت و پین‌اوت‌های استاندارد.
 - **چراغ‌های وضعیت LED:** پایش وضعیت فیزیکی پورت (Up، Down، Administratively Disabled) همراه با افکت‌های نوری و پالس آنلاین.
 - **نشان‌های هوشمند مود و VLAN:** تفکیک پورت‌های Access و Trunk با تگ‌های رنگی پرکنتراست و نمایش آنی شماره VLAN.
-- **تغییرات بلادرنگ پورت و تغییر شناسه VLAN:** امکان ویرایش نام، وضعیت فعال/غیرفعال، جابجایی بین مدهای اکسس و ترانک، و تعیین VLAN ID با اعتبارسنجی خودکار، نرمال‌سازی نام اینترفیس‌های سیسکو (مانند `TenGig0/1` و `Gi1/0/1`)، حل اسلش‌های URL-Encoded و ثبت بلادرنگ در بک‌اند پایتون و پایگاه داده.
-- **مودال تایید و اعمال تغییرات (Confirm & Apply):** پیش‌نمایش کامل تفاوت‌ها (Diff Preview) و دستورات معادل سیسکو قبل از اعمال با ثبت نشان وضعیت در حافظه موقت و اعلام وضعیت نیاز به ذخیره در NVRAM (Write Memory).
+- **فرم ویرایش با طراحی خاکستری (Gray) و انتخابگرهای پیشرفته VLAN:** 
+  - کادرهای اختصاصی خاکستری برای **VLAN ID** و **Allowed VLANs** با دراپ‌داون ویلن‌های تعریف‌شده در سوئیچ، اینپوت عددی و دکمه‌های چیپ انتخاب سریع.
+  - قفل شدن خاکستری (Disabled/Grayed-out) برای Allowed VLANs در حالت Access Mode طبق معماری سیسکو، و فعال‌سازی در حالت Trunk با قابلیت انتخاب تفکیکی ویلن‌ها یا `ALL (1-4094)`.
+- **ویرایش مستقیم از جدول پورت‌ها (All Switch Ports):** با کلیک روی دکمه Edit در هر سطر جدول، فرم ویرایش فعال شده و صفحه با اسکرول نرم خودکار به سمت کارت پیکربندی هدایت می‌شود.
+- **اعمال بلادرنگ و ذخیره فوری روی پورت (Apply & Save to Port):** ذخیره مستقیم تغییرات با یک کلیک یا بررسی و تایید از طریق مودال پیش‌نمایش دستورات سیسکو (CLI Diff Preview)، با به‌روزرسانی هم‌زمان در فیس‌پلیت پورت‌ها، جدول All Switch Ports و پایگاه داده بک‌اند.
 
 ### ۲. امنیت پورت لایه ۲ سیسکو (Cisco Port Security)
 - **فعال‌سازی با کلید تعاملی با کنتراست بالا:** اعمال پیکربندی `switchport port-security` روی پورت‌های اکسس.
@@ -164,8 +167,11 @@ npm start
 - **Hardware-Accurate Visualization:** High-fidelity SVG rendering of physical 8P8C (RJ-45) modular ports with gold contacts, latch tabs, and realistic socket housing.
 - **Dynamic Port Status LEDs:** Real-time visual feedback reflecting operational states (Up, Down, Administratively Disabled) with pulsating glow effects.
 - **VLAN & Mode Indicators:** Distinct visual badges for Access vs. Trunk modes, with high-contrast VLAN tags readable in both light and dark aesthetics.
-- **Interactive Port Inspector & VLAN Reassignment:** One-click modal to inspect port parameters, modify VLAN ID, toggle operational states, switch between Access/Trunk modes, and preview configuration diffs before execution. Features robust URL-decoded Cisco interface name normalization (handling `TenGig0/1`, `Gi1/0/1`, etc.), dynamic port registration, and auto-registration of new VLAN pools in the backend.
-- **Confirm & Apply Interlock:** Diff confirmation summary reviewing old vs. new values and generating standard Cisco IOS commands with immediate visual status feedback and NVRAM write indicators.
+- **Gray-Themed VLAN Configuration & Advanced Selectors:**
+  - Dedicated **Gray-Themed** panels for **VLAN ID** and **Allowed VLANs** featuring a dropdown selector populated with switch VLANs, numeric ID inputs, and quick-select chips.
+  - **Context-Aware Allowed VLANs:** Completely disabled and styled in gray in Access Mode (following Cisco single-VLAN architecture) and unlocked in Trunk Mode with multi-VLAN toggle chips or `ALL (1-4094)` shortcuts.
+- **All Switch Ports Table Integration:** Clicking **Edit** on any port row instantly opens the configuration form and automatically executes a smooth scroll to the active edit card.
+- **Instant Port Synchronization (Apply & Save to Port):** Save port changes directly or review generated Cisco CLI diffs; changes immediately reflect on the RJ-45 faceplate vector graphic, table rows, and the backend persistence database.
 
 ### 2. Cisco Layer-2 Port Security Management
 - **One-Touch Port Security Toggle:** Effortlessly apply `switchport port-security` with dedicated high-contrast controls.

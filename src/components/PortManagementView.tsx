@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Server, Cable, Zap, Shield, ShieldCheck, Search, Filter, Edit3, Save, CheckCircle2, AlertCircle, Layers } from 'lucide-react';
-import { Device, SwitchPort } from '../types';
-import { fetchDevicePorts, updateSwitchPort, batchUpdateSwitchPorts } from '../services/api';
+import { Device, SwitchPort, VlanInfo } from '../types';
+import { fetchDevicePorts, updateSwitchPort, batchUpdateSwitchPorts, fetchVlans } from '../services/api';
 import { CiscoPortContextMenu } from './CiscoPortContextMenu';
 import { CiscoCommandConfirmModal } from './CiscoCommandConfirmModal';
 import { AssignVlanModal } from './AssignVlanModal';
@@ -52,6 +52,8 @@ export const PortManagementView: React.FC<PortManagementViewProps> = ({ devices 
   const [editConnected, setEditConnected] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [availableVlans, setAvailableVlans] = useState<VlanInfo[]>([]);
+  const [portStatusFeedback, setPortStatusFeedback] = useState<{ text: string; isSuccess: boolean } | null>(null);
   const [filterMode, setFilterMode] = useState<'all' | 'up' | 'down' | 'trunk' | 'access'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -60,6 +62,13 @@ export const PortManagementView: React.FC<PortManagementViewProps> = ({ devices 
   useEffect(() => {
     if (selectedDeviceId) {
       loadPorts(selectedDeviceId);
+      fetchVlans()
+        .then((res) => {
+          if (res && res.vlans) {
+            setAvailableVlans(res.vlans);
+          }
+        })
+        .catch((err) => console.error('Failed to load VLANs in PortManagementView:', err));
     }
   }, [selectedDeviceId]);
 
@@ -272,16 +281,25 @@ export const PortManagementView: React.FC<PortManagementViewProps> = ({ devices 
     setEditAdminStatus(port.admin_status);
     setEditMode(port.mode);
     setEditVlan(port.vlan);
-    setEditAllowedVlans(port.allowed_vlans);
-    setEditConnected(port.connected_device);
+    setEditAllowedVlans(port.allowed_vlans || '');
+    setEditConnected(port.connected_device || '');
     setEditDesc(port.description || '');
     setIsEditing(true);
+    setPortStatusFeedback(null);
+
+    setTimeout(() => {
+      const el = document.getElementById('port-mgmt-edit-card');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 60);
   };
 
   const handleSavePort = async () => {
     if (!currentDevice || !selectedPort) return;
     try {
       setIsSaving(true);
+      setPortStatusFeedback(null);
       const res = await updateSwitchPort(currentDevice.id, selectedPort.port_id, {
         admin_status: editAdminStatus,
         status: editAdminStatus === 'disabled' ? 'down' : 'up',
@@ -292,13 +310,40 @@ export const PortManagementView: React.FC<PortManagementViewProps> = ({ devices 
         description: editDesc,
       });
 
+      const updatedPort: SwitchPort = res.port || {
+        ...selectedPort,
+        admin_status: editAdminStatus,
+        status: editAdminStatus === 'disabled' ? 'down' : 'up',
+        mode: editMode,
+        vlan: editVlan,
+        allowed_vlans: editAllowedVlans,
+        connected_device: editConnected,
+        description: editDesc,
+      };
+
       setPorts((prev) =>
-        prev.map((p) => (p.port_id === selectedPort.port_id ? res.port : p))
+        prev.map((p) => {
+          const isTarget =
+            p.port_id.toLowerCase() === selectedPort.port_id.toLowerCase() ||
+            p.name.toLowerCase() === selectedPort.name.toLowerCase() ||
+            p.port_id.toLowerCase() === updatedPort.port_id.toLowerCase() ||
+            p.name.toLowerCase() === updatedPort.name.toLowerCase();
+          return isTarget ? updatedPort : p;
+        })
       );
-      setSelectedPort(res.port);
+      setSelectedPort(updatedPort);
       setIsEditing(false);
+      setPortStatusFeedback({
+        text: isEn
+          ? `Port ${selectedPort.name || selectedPort.port_id} configuration (VLAN ${editVlan}, ${editMode.toUpperCase()}) successfully applied to switch.`
+          : `پیکربندی پورت ${selectedPort.name || selectedPort.port_id} (ویلن ${editVlan}، مد ${editMode.toUpperCase()}) با موفقیت ذخیره و روی پورت اعمال شد.`,
+        isSuccess: true,
+      });
     } catch (err: any) {
-      alert(t('ports_save_error', { error: err.message }));
+      setPortStatusFeedback({
+        text: isEn ? `Error updating port: ${err.message}` : `خطا در ذخیره پیکربندی پورت: ${err.message}`,
+        isSuccess: false,
+      });
     } finally {
       setIsSaving(false);
     }
@@ -651,7 +696,24 @@ export const PortManagementView: React.FC<PortManagementViewProps> = ({ devices 
 
       {/* Selected Port Detailed Card */}
       {selectedPort && (
-        <div className="port-sub-card bg-white/5 border border-white/10 rounded-xl p-3.5 shadow-sm space-y-3">
+        <div id="port-mgmt-edit-card" className="port-sub-card bg-white/5 border border-white/10 rounded-xl p-3.5 shadow-sm space-y-3 scroll-mt-6">
+          {portStatusFeedback && (
+            <div
+              className={`p-3 rounded-xl text-xs flex items-center gap-2 border transition-all ${
+                portStatusFeedback.isSuccess
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                  : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+              }`}
+            >
+              {portStatusFeedback.isSuccess ? (
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+              ) : (
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+              )}
+              <span className="font-medium">{portStatusFeedback.text}</span>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-500 text-white shadow-md">
@@ -699,18 +761,20 @@ export const PortManagementView: React.FC<PortManagementViewProps> = ({ devices 
             ) : (
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => setIsEditing(false)}
                   className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 text-xs transition active:scale-95 cursor-pointer"
                 >
                   {t('ports_btn_cancel')}
                 </button>
                 <button
+                  type="button"
                   onClick={handleSavePort}
                   disabled={isSaving}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white text-xs font-medium shadow-[0_0_15px_rgba(99,102,241,0.35)] transition disabled:opacity-50 border border-white/10 active:scale-95 cursor-pointer"
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md transition disabled:opacity-50 border border-emerald-400/40 active:scale-95 cursor-pointer"
                 >
                   <Save className="w-3.5 h-3.5" />
-                  <span>{isSaving ? t('ports_saving') : t('ports_apply_changes')}</span>
+                  <span>{isSaving ? (isEn ? 'Applying...' : 'در حال اعمال...') : (isEn ? 'Apply & Save to Port' : 'ذخیره و اعمال روی پورت')}</span>
                 </button>
               </div>
             )}
@@ -810,74 +874,237 @@ export const PortManagementView: React.FC<PortManagementViewProps> = ({ devices 
             </div>
           ) : (
             /* Edit Mode */
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
-              <div>
-                <label className="block text-slate-300 mb-1 text-[11px] font-medium">{isEn ? 'Port Mode:' : 'حالت پورت (Port Mode):'}</label>
-                <select
-                  value={editMode}
-                  onChange={(e) => setEditMode(e.target.value as 'trunk' | 'access')}
-                  className="w-full px-3 py-1.5 rounded-xl bg-black/30 border border-white/15 text-slate-100 text-xs font-mono focus:border-indigo-400 focus:outline-none"
-                >
-                  <option value="access" className="bg-slate-900 text-white">{isEn ? 'Access (Client / Host / PC)' : 'Access (اکسس - کلاینت / هاست / پی‌سی)'}</option>
-                  <option value="trunk" className="bg-slate-900 text-white">{isEn ? 'Trunk (Switch-to-Switch / Router)' : 'Trunk (ترانک - ارتباط سوئیچ به سوئیچ / روتر)'}</option>
-                </select>
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+                <div>
+                  <label className="block text-slate-300 mb-1 text-[11px] font-medium">{isEn ? 'Port Mode:' : 'حالت پورت (Port Mode):'}</label>
+                  <select
+                    value={editMode}
+                    onChange={(e) => setEditMode(e.target.value as 'trunk' | 'access')}
+                    className="w-full px-3 py-1.5 rounded-xl bg-black/30 border border-white/15 text-slate-100 text-xs font-mono focus:border-indigo-400 focus:outline-none"
+                  >
+                    <option value="access" className="bg-slate-900 text-white">{isEn ? 'Access (Client / Host / PC)' : 'Access (اکسس - کلاینت / هاست / پی‌سی)'}</option>
+                    <option value="trunk" className="bg-slate-900 text-white">{isEn ? 'Trunk (Switch-to-Switch / Router)' : 'Trunk (ترانک - ارتباط سوئیچ به سوئیچ / روتر)'}</option>
+                  </select>
+                </div>
+
+                {/* VLAN ID - Styled in GRAY theme */}
+                <div className="p-2.5 rounded-xl bg-slate-800/90 border border-slate-700 space-y-1.5 sm:col-span-2 lg:col-span-1">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-slate-200 font-semibold text-[11px] flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                      <span>{isEn ? 'VLAN ID (Gray):' : 'شناسه ویلن (VLAN ID - خاکستری):'}</span>
+                    </label>
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-700 text-slate-200">
+                      {editMode === 'trunk' ? 'Native' : `VLAN ${editVlan}`}
+                    </span>
+                  </div>
+
+                  <select
+                    value={availableVlans.some((v) => v.id === editVlan) ? editVlan : 'custom'}
+                    onChange={(e) => {
+                      if (e.target.value !== 'custom') {
+                        setEditVlan(Number(e.target.value));
+                      }
+                    }}
+                    className="w-full px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 text-xs font-mono focus:outline-none focus:border-slate-500"
+                  >
+                    <option value="" disabled className="bg-slate-900 text-slate-400">
+                      {isEn ? '-- Select VLAN --' : '-- انتخاب ویلن --'}
+                    </option>
+                    {availableVlans.map((v) => (
+                      <option key={v.id} value={v.id} className="bg-slate-900 text-slate-200">
+                        VLAN {v.id} - {v.name} ({v.subnet})
+                      </option>
+                    ))}
+                    <option value="custom" className="bg-slate-900 text-amber-300">
+                      {isEn ? '✎ Custom VLAN ID...' : '✎ ورود دستی شناسه ویلن...'}
+                    </option>
+                  </select>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      max={4094}
+                      value={editVlan}
+                      onChange={(e) => setEditVlan(Math.max(1, Math.min(4094, Number(e.target.value) || 1)))}
+                      className="w-full px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 text-xs font-mono text-left focus:outline-none focus:border-slate-500"
+                      dir="ltr"
+                      placeholder="1-4094"
+                    />
+                  </div>
+
+                  <div className="flex items-center flex-wrap gap-1">
+                    <span className="text-[9px] text-slate-400">{isEn ? 'Quick:' : 'سریع:'}</span>
+                    {(availableVlans.length > 0 ? availableVlans.slice(0, 4) : [
+                      { id: 1, name: 'Default' },
+                      { id: 10, name: 'Servers' },
+                      { id: 20, name: 'Staff' },
+                      { id: 30, name: 'Dev' },
+                    ]).map((v) => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => setEditVlan(v.id)}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-mono border transition cursor-pointer ${
+                          editVlan === v.id
+                            ? 'bg-slate-600 text-white border-slate-500 font-bold'
+                            : 'bg-slate-850 text-slate-300 border-slate-700 hover:bg-slate-700'
+                        }`}
+                      >
+                        v{v.id}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Allowed Trunk VLANs - Gray in both modes, disabled in Access */}
+                <div className={`p-2.5 rounded-xl border space-y-1.5 transition sm:col-span-2 lg:col-span-1 ${
+                  editMode === 'access'
+                    ? 'bg-slate-900/60 border-slate-800 text-slate-500'
+                    : 'bg-slate-800/90 border-slate-700'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <label className={`block font-semibold text-[11px] flex items-center gap-1.5 ${
+                      editMode === 'access' ? 'text-slate-400' : 'text-slate-200'
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${editMode === 'access' ? 'bg-slate-600' : 'bg-purple-400'}`}></span>
+                      <span>{isEn ? 'Allowed VLANs (Gray):' : 'ویلن‌های مجاز (خاکستری):'}</span>
+                    </label>
+                    <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded border ${
+                      editMode === 'access'
+                        ? 'bg-slate-950 text-slate-400 border-slate-850'
+                        : 'bg-purple-950 text-purple-300 border-purple-800'
+                    }`}>
+                      {editMode === 'access' ? (isEn ? 'Locked' : 'قفل در Access') : 'Trunk'}
+                    </span>
+                  </div>
+
+                  {editMode === 'access' ? (
+                    <div>
+                      <input
+                        type="text"
+                        disabled
+                        value={isEn ? 'Locked (Single VLAN mode)' : 'غیرفعال (پورت تک‌ویلن)'}
+                        className="w-full px-2.5 py-1 rounded-lg bg-slate-950/80 border border-slate-850 text-slate-400 text-xs font-mono cursor-not-allowed select-none"
+                      />
+                      <p className="text-[9px] text-slate-400 mt-1">
+                        {isEn ? 'Allowed list applies to Trunk ports only.' : 'لیست مجاز مختص پورت‌های ترانک است.'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <input
+                        type="text"
+                        value={editAllowedVlans}
+                        onChange={(e) => setEditAllowedVlans(e.target.value)}
+                        placeholder={isEn ? 'e.g. 1,10,20,30,50' : 'مثال: 1,10,20,30,50'}
+                        className="w-full px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 text-xs font-mono text-left focus:outline-none focus:border-slate-500"
+                        dir="ltr"
+                      />
+                      <div className="flex items-center flex-wrap gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditAllowedVlans('1-4094')}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-700 text-slate-200 border border-slate-600 hover:bg-slate-600 cursor-pointer"
+                        >
+                          ALL
+                        </button>
+                        {(availableVlans.length > 0 ? availableVlans : [
+                          { id: 1, name: 'Default' },
+                          { id: 10, name: 'Servers' },
+                          { id: 20, name: 'Staff' },
+                          { id: 30, name: 'Dev' },
+                        ]).map((v) => {
+                          const vStr = String(v.id);
+                          const isIncluded = editAllowedVlans.split(',').map((s) => s.trim()).includes(vStr);
+                          return (
+                            <button
+                              key={v.id}
+                              type="button"
+                              onClick={() => {
+                                const currentList = editAllowedVlans ? editAllowedVlans.split(',').map((s) => s.trim()).filter(Boolean) : [];
+                                if (isIncluded) {
+                                  setEditAllowedVlans(currentList.filter((item) => item !== vStr).join(','));
+                                } else {
+                                  setEditAllowedVlans([...currentList, vStr].join(','));
+                                }
+                              }}
+                              className={`px-1.5 py-0.5 rounded text-[9px] font-mono border transition cursor-pointer ${
+                                isIncluded
+                                  ? 'bg-purple-900/80 text-purple-200 border-purple-600 font-bold'
+                                  : 'bg-slate-850 text-slate-400 border-slate-700 hover:bg-slate-700'
+                              }`}
+                            >
+                              {isIncluded ? `✓${v.id}` : `+${v.id}`}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 mb-1 text-[11px] font-medium">{isEn ? 'Connected Device / Host:' : 'تجهیز یا هاست متصل:'}</label>
+                  <input
+                    type="text"
+                    value={editConnected}
+                    onChange={(e) => setEditConnected(e.target.value)}
+                    placeholder={isEn ? 'e.g. AP-WIFI-02 or Core Uplink' : 'مثال: AP-WIFI-02 یا Core Uplink'}
+                    className="w-full px-3 py-1.5 rounded-xl bg-black/30 border border-white/15 text-slate-100 text-xs focus:border-indigo-400 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 mb-1 text-[11px] font-medium">{isEn ? 'Administrative Status:' : 'وضعیت مدیریتی پورت:'}</label>
+                  <select
+                    value={editAdminStatus}
+                    onChange={(e) => setEditAdminStatus(e.target.value as 'enabled' | 'disabled')}
+                    className="w-full px-3 py-1.5 rounded-xl bg-black/30 border border-white/15 text-slate-100 text-xs font-mono focus:border-indigo-400 focus:outline-none"
+                  >
+                    <option value="enabled" className="bg-slate-900 text-white">{t('ports_admin_no_shutdown')}</option>
+                    <option value="disabled" className="bg-slate-900 text-white">{t('ports_admin_shutdown')}</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 mb-1 text-[11px] font-medium">{isEn ? 'Description:' : 'توضیحات (Description):'}</label>
+                  <input
+                    type="text"
+                    value={editDesc}
+                    onChange={(e) => setEditDesc(e.target.value)}
+                    placeholder={isEn ? 'Description for this port' : 'توضیح مربوط به این پورت'}
+                    className="w-full px-3 py-1.5 rounded-xl bg-black/30 border border-white/15 text-slate-100 text-xs focus:border-indigo-400 focus:outline-none"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-slate-300 mb-1 text-[11px] font-medium">{isEn ? 'VLAN ID:' : 'شماره ویلن (VLAN ID):'}</label>
-                <input
-                  type="number"
-                  value={editVlan}
-                  onChange={(e) => setEditVlan(Number(e.target.value))}
-                  className="w-full px-3 py-1.5 rounded-xl bg-black/30 border border-white/15 text-slate-100 text-xs font-mono text-left focus:border-indigo-400 focus:outline-none"
-                  dir="ltr"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-300 mb-1 text-[11px] font-medium">{isEn ? 'Allowed Trunk VLANs:' : 'ویلن‌های مجاز (Allowed VLANs):'}</label>
-                <input
-                  type="text"
-                  value={editAllowedVlans}
-                  onChange={(e) => setEditAllowedVlans(e.target.value)}
-                  placeholder={isEn ? 'e.g. 1,10,20,30,50' : 'مثال: 1,10,20,30,50'}
-                  className="w-full px-3 py-1.5 rounded-xl bg-black/30 border border-white/15 text-slate-100 text-xs font-mono text-left focus:border-indigo-400 focus:outline-none"
-                  dir="ltr"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-300 mb-1 text-[11px] font-medium">{isEn ? 'Connected Device / Host:' : 'تجهیز یا هاست متصل:'}</label>
-                <input
-                  type="text"
-                  value={editConnected}
-                  onChange={(e) => setEditConnected(e.target.value)}
-                  placeholder={isEn ? 'e.g. AP-WIFI-02 or Core Uplink' : 'مثال: AP-WIFI-02 یا Core Uplink'}
-                  className="w-full px-3 py-1.5 rounded-xl bg-black/30 border border-white/15 text-slate-100 text-xs focus:border-indigo-400 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-300 mb-1 text-[11px] font-medium">{isEn ? 'Administrative Status:' : 'وضعیت مدیریتی پورت:'}</label>
-                <select
-                  value={editAdminStatus}
-                  onChange={(e) => setEditAdminStatus(e.target.value as 'enabled' | 'disabled')}
-                  className="w-full px-3 py-1.5 rounded-xl bg-black/30 border border-white/15 text-slate-100 text-xs font-mono focus:border-indigo-400 focus:outline-none"
-                >
-                  <option value="enabled" className="bg-slate-900 text-white">{t('ports_admin_no_shutdown')}</option>
-                  <option value="disabled" className="bg-slate-900 text-white">{t('ports_admin_shutdown')}</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-slate-300 mb-1 text-[11px] font-medium">{isEn ? 'Description:' : 'توضیحات (Description):'}</label>
-                <input
-                  type="text"
-                  value={editDesc}
-                  onChange={(e) => setEditDesc(e.target.value)}
-                  placeholder={isEn ? 'Description for this port' : 'توضیح مربوط به این پورت'}
-                  className="w-full px-3 py-1.5 rounded-xl bg-black/30 border border-white/15 text-slate-100 text-xs focus:border-indigo-400 focus:outline-none"
-                />
+              {/* Bottom save bar */}
+              <div className="flex flex-wrap items-center justify-between p-2.5 rounded-xl bg-slate-900/90 border border-slate-700/80 gap-2">
+                <span className="text-[11px] text-slate-300 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span>{isEn ? `Apply to ${selectedPort.name} (VLAN ${editVlan})` : `اعمال به پورت ${selectedPort.name} (ویلن ${editVlan})`}</span>
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(false)}
+                    className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 text-xs transition cursor-pointer"
+                  >
+                    {t('ports_btn_cancel')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSavePort}
+                    disabled={isSaving}
+                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md transition disabled:opacity-50 cursor-pointer border border-emerald-400/40"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{isSaving ? (isEn ? 'Applying...' : 'در حال اعمال...') : (isEn ? 'Apply & Save to Port' : 'ذخیره و اعمال روی پورت')}</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}

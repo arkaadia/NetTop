@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Cable, Zap, Shield, ShieldCheck, ShieldAlert, CheckCircle2, AlertCircle, Edit3, Save, Power, Terminal, AlertTriangle, ArrowRight, Check, Lock, Key, Layers, CheckSquare, Square, RefreshCw, Sparkles } from 'lucide-react';
-import { Device, SwitchPort } from '../types';
-import { fetchDevicePorts, updateSwitchPort, writeMemory, batchUpdateSwitchPorts, syncDeviceWithRealSwitch } from '../services/api';
+import { Device, SwitchPort, VlanInfo } from '../types';
+import { fetchDevicePorts, updateSwitchPort, writeMemory, batchUpdateSwitchPorts, syncDeviceWithRealSwitch, fetchVlans } from '../services/api';
 import { NetworkPortSvg } from './NetworkPortSvg';
 import { CiscoPortContextMenu } from './CiscoPortContextMenu';
 import { CiscoCommandConfirmModal } from './CiscoCommandConfirmModal';
@@ -56,6 +56,8 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
   const [editPortSecConfiguredMac, setEditPortSecConfiguredMac] = useState('');
   const [editPortSecViolation, setEditPortSecViolation] = useState<'shutdown' | 'restrict' | 'protect'>('shutdown');
   const [isSaving, setIsSaving] = useState(false);
+
+  const [availableVlans, setAvailableVlans] = useState<VlanInfo[]>([]);
 
   // Confirmation Summary Modal state
   const [showConfirmSummary, setShowConfirmSummary] = useState(false);
@@ -232,6 +234,13 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
   useEffect(() => {
     if (device && isOpen) {
       loadPorts();
+      fetchVlans()
+        .then((res) => {
+          if (res && res.vlans) {
+            setAvailableVlans(res.vlans);
+          }
+        })
+        .catch((err) => console.error('Failed to load VLANs in PortInspector:', err));
     }
   }, [device, isOpen]);
 
@@ -407,9 +416,87 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
     setEditPortSecConfiguredMac(port.port_security_configured_mac || '');
     setEditPortSecViolation(port.port_security_violation || 'shutdown');
     setIsEditing(true);
+
+    // Smooth scroll directly to the edit configuration card
+    setTimeout(() => {
+      const el = document.getElementById('port-config-edit-card');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 60);
   };
 
-  // Called when user clicks "ذخیره در سوئیچ" -> opens summary modal first
+  // Direct Save & Apply immediately to the switch port without secondary confirmation modal
+  const handleDirectSave = async () => {
+    if (!device || !selectedPort) return;
+    try {
+      setIsSaving(true);
+      const res = await updateSwitchPort(device.id, selectedPort.port_id, {
+        admin_status: editAdminStatus,
+        status: editAdminStatus === 'disabled' ? 'down' : 'up',
+        mode: editMode,
+        vlan: editVlan,
+        allowed_vlans: editAllowedVlans,
+        connected_device: editConnected,
+        description: editDesc,
+        port_security_enabled: editPortSecEnabled,
+        port_security_max_mac: editPortSecMaxMac,
+        port_security_mode: editPortSecMode,
+        port_security_configured_mac: editPortSecConfiguredMac,
+        port_security_violation: editPortSecViolation,
+      });
+
+      const updatedPort: SwitchPort = res.port || {
+        ...selectedPort,
+        admin_status: editAdminStatus,
+        status: editAdminStatus === 'disabled' ? 'down' : 'up',
+        mode: editMode,
+        vlan: editVlan,
+        allowed_vlans: editAllowedVlans,
+        connected_device: editConnected,
+        description: editDesc,
+        port_security_enabled: editPortSecEnabled,
+        port_security_max_mac: editPortSecMaxMac,
+        port_security_mode: editPortSecMode,
+        port_security_configured_mac: editPortSecConfiguredMac,
+        port_security_violation: editPortSecViolation,
+      };
+
+      setPorts((prev) =>
+        prev.map((p) => {
+          const isTarget =
+            p.port_id.toLowerCase() === selectedPort.port_id.toLowerCase() ||
+            p.name.toLowerCase() === selectedPort.name.toLowerCase() ||
+            p.port_id.toLowerCase() === updatedPort.port_id.toLowerCase() ||
+            p.name.toLowerCase() === updatedPort.name.toLowerCase();
+          return isTarget ? updatedPort : p;
+        })
+      );
+      setSelectedPort(updatedPort);
+      setIsEditing(false);
+      if (device) {
+        device.has_unsaved_changes = true;
+      }
+      setSyncStatusMessage({
+        text: isEn
+          ? `Port ${selectedPort.name || selectedPort.port_id} configuration (VLAN ${editVlan}, Mode ${editMode.toUpperCase()}) successfully applied & saved.`
+          : `پیکربندی پورت ${selectedPort.name || selectedPort.port_id} (ویلن ${editVlan}، مد ${editMode.toUpperCase()}) با موفقیت ذخیره و روی پورت اعمال شد.`,
+        isSuccess: true,
+      });
+      if (onPortUpdated) onPortUpdated();
+    } catch (err: any) {
+      setSyncStatusMessage({
+        text: isEn
+          ? `Failed to apply port configuration: ${err.message}`
+          : `خطا در اعمال پیکربندی پورت: ${err.message}`,
+        isSuccess: false,
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Called when user clicks "پیش‌نمایش CLI و تایید" -> opens summary modal first
   const handleOpenSummary = () => {
     setShowConfirmSummary(true);
   };
@@ -452,11 +539,14 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
       };
 
       setPorts((prev) =>
-        prev.map((p) =>
-          p.port_id === selectedPort.port_id || p.port_id === updatedPort.port_id
-            ? updatedPort
-            : p
-        )
+        prev.map((p) => {
+          const isTarget =
+            p.port_id.toLowerCase() === selectedPort.port_id.toLowerCase() ||
+            p.name.toLowerCase() === selectedPort.name.toLowerCase() ||
+            p.port_id.toLowerCase() === updatedPort.port_id.toLowerCase() ||
+            p.name.toLowerCase() === updatedPort.name.toLowerCase();
+          return isTarget ? updatedPort : p;
+        })
       );
       setSelectedPort(updatedPort);
       setIsEditing(false);
@@ -1034,7 +1124,7 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
 
           {/* Detailed Inspector & Editor Card */}
           {selectedPort && (
-            <div className="port-sub-card bg-white/5 border border-white/10 rounded-xl p-3.5 shadow-sm">
+            <div id="port-config-edit-card" className="port-sub-card bg-white/5 border border-white/10 rounded-xl p-3.5 shadow-sm scroll-mt-6">
               <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
                 <div className="flex items-center gap-2.5">
                   <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
@@ -1080,18 +1170,31 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
                 ) : (
                   <div className="flex items-center gap-2">
                     <button
+                      type="button"
                       onClick={() => setIsEditing(false)}
                       className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 text-xs transition cursor-pointer"
                     >
                       {isEn ? 'Cancel' : 'انصراف'}
                     </button>
                     <button
-                      onClick={handleOpenSummary}
+                      type="button"
+                      onClick={handleDirectSave}
                       disabled={isSaving}
-                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white text-xs font-medium shadow-md transition disabled:opacity-50 cursor-pointer border border-white/10"
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md transition disabled:opacity-50 cursor-pointer border border-emerald-400/40"
+                      title={isEn ? 'Directly save and apply to port' : 'اعمال و ذخیره مستقیم روی پورت'}
                     >
                       <Save className="w-3.5 h-3.5" />
-                      <span>{isEn ? 'Save & Apply (Preview)' : 'ذخیره در سوئیچ (پیش‌نمایش و تایید)'}</span>
+                      <span>{isSaving ? (isEn ? 'Applying...' : 'در حال اعمال...') : (isEn ? 'Apply & Save to Port' : 'ذخیره و اعمال روی پورت')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleOpenSummary}
+                      disabled={isSaving}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 text-xs font-medium shadow-xs transition disabled:opacity-50 cursor-pointer"
+                      title={isEn ? 'Review CLI commands preview' : 'پیش‌نمایش دستورات سیسکو'}
+                    >
+                      <Terminal className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>{isEn ? 'CLI Diff & Confirm' : 'پیش‌نمایش CLI و تایید'}</span>
                     </button>
                   </div>
                 )}
@@ -1219,27 +1322,175 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
                       </select>
                     </div>
 
-                    <div>
-                      <label className="block text-slate-300 mb-1 font-medium">{isEn ? 'VLAN ID:' : 'شماره ویلن (VLAN ID):'}</label>
-                      <input
-                        type="number"
-                        value={editVlan}
-                        onChange={(e) => setEditVlan(Number(e.target.value))}
-                        className="w-full px-2.5 py-1.5 rounded-lg bg-black/30 border border-white/15 text-white text-xs font-mono text-left focus:outline-none focus:border-indigo-400"
-                        dir="ltr"
-                      />
+                    {/* VLAN ID - Styled in GRAY theme with dropdown selector & quick chips */}
+                    <div className="port-sub-card p-3 rounded-xl bg-slate-800/90 border border-slate-700/90 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-slate-200 font-semibold text-xs flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                          <span>{isEn ? 'VLAN ID (Gray - Select/Type):' : 'شناسه ویلن (VLAN ID - خاکستری):'}</span>
+                        </label>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-700 text-slate-200 border border-slate-600">
+                          {editMode === 'trunk' ? (isEn ? 'Native VLAN' : 'ویلن پیش‌فرض نیتیو') : `VLAN ${editVlan}`}
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        {/* Dropdown for Switch VLANs */}
+                        <select
+                          value={availableVlans.some((v) => v.id === editVlan) ? editVlan : 'custom'}
+                          onChange={(e) => {
+                            if (e.target.value !== 'custom') {
+                              setEditVlan(Number(e.target.value));
+                            }
+                          }}
+                          className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 text-xs font-mono focus:outline-none focus:border-slate-500"
+                        >
+                          <option value="" disabled className="bg-slate-900 text-slate-400">
+                            {isEn ? '-- Select from Switch VLANs --' : '-- انتخاب از ویلن‌های سوئیچ --'}
+                          </option>
+                          {availableVlans.map((v) => (
+                            <option key={v.id} value={v.id} className="bg-slate-900 text-slate-200">
+                              VLAN {v.id} - {v.name} ({v.subnet})
+                            </option>
+                          ))}
+                          <option value="custom" className="bg-slate-900 text-amber-300">
+                            {isEn ? '✎ Custom VLAN ID (Enter manually below)...' : '✎ شناسه ویلن دلخواه (ورود دستی)...'}
+                          </option>
+                        </select>
+
+                        {/* Numeric input in Gray */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-slate-400 font-mono">ID:</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={4094}
+                            value={editVlan}
+                            onChange={(e) => setEditVlan(Math.max(1, Math.min(4094, Number(e.target.value) || 1)))}
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 text-xs font-mono text-left focus:outline-none focus:border-slate-500"
+                            dir="ltr"
+                            placeholder="1 - 4094"
+                          />
+                        </div>
+
+                        {/* Quick Selection Chips in Gray */}
+                        <div className="flex items-center flex-wrap gap-1 pt-0.5">
+                          <span className="text-[10px] text-slate-400">{isEn ? 'Quick:' : 'انتخاب سریع:'}</span>
+                          {(availableVlans.length > 0 ? availableVlans.slice(0, 5) : [
+                            { id: 1, name: 'Default' },
+                            { id: 10, name: 'Servers' },
+                            { id: 20, name: 'Staff' },
+                            { id: 30, name: 'Dev' },
+                            { id: 50, name: 'Guest' },
+                          ]).map((v) => (
+                            <button
+                              key={v.id}
+                              type="button"
+                              onClick={() => setEditVlan(v.id)}
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-mono border transition cursor-pointer ${
+                                editVlan === v.id
+                                  ? 'bg-slate-600 text-white border-slate-500 font-bold'
+                                  : 'bg-slate-850 text-slate-300 border-slate-700 hover:bg-slate-700'
+                              }`}
+                            >
+                              v{v.id}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="block text-slate-300 mb-1 font-medium">{isEn ? 'Allowed VLANs:' : 'ویلن‌های مجاز (Allowed VLANs):'}</label>
-                      <input
-                        type="text"
-                        value={editAllowedVlans}
-                        onChange={(e) => setEditAllowedVlans(e.target.value)}
-                        placeholder={isEn ? 'e.g. 1,10,20,30,50' : 'مثال: 1,10,20,30,50'}
-                        className="w-full px-2.5 py-1.5 rounded-lg bg-black/30 border border-white/15 text-white text-xs font-mono text-left focus:outline-none focus:border-indigo-400"
-                        dir="ltr"
-                      />
+                    {/* Allowed VLANs - Gray in both modes, locked/disabled in Access mode */}
+                    <div className={`port-sub-card p-3 rounded-xl border space-y-2 transition ${
+                      editMode === 'access'
+                        ? 'bg-slate-900/60 border-slate-800/80 text-slate-500'
+                        : 'bg-slate-800/90 border-slate-700/90'
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <label className={`block font-semibold text-xs flex items-center gap-1.5 ${
+                          editMode === 'access' ? 'text-slate-400' : 'text-slate-200'
+                        }`}>
+                          <span className={`w-2 h-2 rounded-full ${editMode === 'access' ? 'bg-slate-600' : 'bg-purple-400'}`}></span>
+                          <span>{isEn ? 'Allowed VLANs (Gray):' : 'ویلن‌های مجاز (Allowed VLANs - خاکستری):'}</span>
+                        </label>
+                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                          editMode === 'access'
+                            ? 'bg-slate-950 text-slate-400 border-slate-800'
+                            : 'bg-purple-950 text-purple-300 border-purple-800'
+                        }`}>
+                          {editMode === 'access' ? (isEn ? 'Locked in Access' : 'غیرفعال در Access') : 'Trunk Mode'}
+                        </span>
+                      </div>
+
+                      {editMode === 'access' ? (
+                        <div className="space-y-1.5">
+                          <input
+                            type="text"
+                            disabled
+                            value={isEn ? 'Not applicable in Access mode (Single VLAN only)' : 'غیرفعال در مد Access (پورت اکسس تک‌ویلن است)'}
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950/80 border border-slate-850 text-slate-400 text-xs font-mono cursor-not-allowed select-none"
+                          />
+                          <p className="text-[10px] text-slate-400 leading-normal">
+                            {isEn
+                              ? 'ℹ️ In Cisco architecture, Allowed VLAN lists only apply to 802.1Q Trunk ports. Switch to Trunk mode to configure.'
+                              : 'ℹ️ در استاندارد سیسکو، لیست ویلن‌های مجاز فقط برای پورت‌های ترانک (Trunk) کاربرد دارد. برای فعال‌سازی، مد را روی Trunk بگذارید.'}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5">
+                          <input
+                            type="text"
+                            value={editAllowedVlans}
+                            onChange={(e) => setEditAllowedVlans(e.target.value)}
+                            placeholder={isEn ? 'e.g. 1,10,20,30,50 or ALL' : 'مثال: 1,10,20,30,50 یا ALL'}
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 text-xs font-mono text-left focus:outline-none focus:border-slate-500"
+                            dir="ltr"
+                          />
+                          {/* Quick selection buttons for Trunk Allowed VLANs in Gray */}
+                          <div className="flex items-center flex-wrap gap-1 pt-0.5">
+                            <button
+                              type="button"
+                              onClick={() => setEditAllowedVlans('1-4094')}
+                              className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-700 text-slate-200 border border-slate-600 hover:bg-slate-600 cursor-pointer"
+                            >
+                              ALL (1-4094)
+                            </button>
+                            {(availableVlans.length > 0 ? availableVlans : [
+                              { id: 1, name: 'Default' },
+                              { id: 10, name: 'Servers' },
+                              { id: 20, name: 'Staff' },
+                              { id: 30, name: 'Dev' },
+                              { id: 50, name: 'Guest' },
+                              { id: 99, name: 'Mgmt' },
+                            ]).map((v) => {
+                              const vStr = String(v.id);
+                              const isIncluded = editAllowedVlans.split(',').map((s) => s.trim()).includes(vStr);
+                              return (
+                                <button
+                                  key={v.id}
+                                  type="button"
+                                  onClick={() => {
+                                    const currentList = editAllowedVlans ? editAllowedVlans.split(',').map((s) => s.trim()).filter(Boolean) : [];
+                                    if (isIncluded) {
+                                      setEditAllowedVlans(currentList.filter((item) => item !== vStr).join(','));
+                                    } else {
+                                      setEditAllowedVlans([...currentList, vStr].join(','));
+                                    }
+                                  }}
+                                  className={`px-1.5 py-0.5 rounded text-[10px] font-mono border transition cursor-pointer ${
+                                    isIncluded
+                                      ? 'bg-purple-900/80 text-purple-200 border-purple-600 font-bold'
+                                      : 'bg-slate-850 text-slate-400 border-slate-700 hover:bg-slate-700'
+                                  }`}
+                                  title={`Toggle VLAN ${v.id}`}
+                                >
+                                  {isIncluded ? `✓ ${v.id}` : `+ ${v.id}`}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -1500,6 +1751,45 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
                         </div>
                       </div>
                     )}
+                  </div>
+
+                  {/* Bottom Quick Action Bar for instant saving */}
+                  <div className="flex flex-wrap items-center justify-between p-3 rounded-xl bg-slate-900/90 border border-slate-700/80 gap-3">
+                    <div className="text-xs text-slate-300 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>
+                        {isEn
+                          ? `Ready to apply changes to ${selectedPort.name} (VLAN: ${editVlan}, Mode: ${editMode.toUpperCase()})`
+                          : `آماده اعمال تغییرات روی ${selectedPort.name} (ویلن: ${editVlan}، مد: ${editMode.toUpperCase()})`}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsEditing(false)}
+                        className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 text-xs transition cursor-pointer"
+                      >
+                        {isEn ? 'Cancel' : 'انصراف'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDirectSave}
+                        disabled={isSaving}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg transition disabled:opacity-50 cursor-pointer border border-emerald-400/40"
+                      >
+                        <Save className="w-4 h-4" />
+                        <span>{isSaving ? (isEn ? 'Applying...' : 'در حال اعمال...') : (isEn ? 'Apply & Save to Port' : 'ذخیره و اعمال روی پورت')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleOpenSummary}
+                        disabled={isSaving}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 text-xs font-medium transition cursor-pointer"
+                      >
+                        <Terminal className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>{isEn ? 'CLI Diff & Confirm' : 'پیش‌نمایش CLI'}</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
