@@ -114,6 +114,35 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
   - اندپوینت‌های بک‌اند سرور (`Backend Endpoint`)
 - **کلید کپی سریع پرامپت (Copy Target Token):** دکمه تک‌کلیک جهت کپی کردن فرمت دقیق درخواست به هوش مصنوعی (مثل `[TARGET: ports] - Modify src/components/PortManagementView.tsx`) جهت ارائه دستورات شفاف برای اعمال تغییرات بعدی بدون ابهام.
 
+### ۱۲. نشانگرهای اختصاصی گردش‌کار در تمامی مدال‌ها و کارت‌ها (Omnipresent Workflow Badges)
+- **دسترسی بلادرنگ به منطق و معماری در هر نقطه از برنامه:**
+  - برچسب تعاملی `WorkflowTriggerBadge` در هدر تمامی پنجره‌ها و کارت‌های کلیدی سیستم تعبیه شده تا کاربر با ورود به هر مدال یا کارت بتواند دقیقاً معماری، فایل منبع، توابع API و پایپ‌لاین آن بخش را مشاهده کند.
+- **پوشش کامل مدال‌ها (All Modals):**
+  - مدال ثبت تجهیز جدید (`AddDeviceModal`)
+  - کنسول شبیه‌ساز سیسکو (`CiscoTerminalModal`)
+  - بازرس فیزیکی پورت (`PortInspectorModal`)
+  - اسکنر خودکار شبکه محلی (`LanScannerModal`)
+  - پنجره اعمال الگوی کانفیگ (`ApplyTemplateModal`)
+  - ویرایشگر تمپلیت (`TemplateEditorModal`)
+  - شبیه‌ساز و کلون تمپلیت (`CloneTemplateModal`)
+  - استخراج‌کننده کانفیگ زنده تجهیز (`CaptureConfigModal`)
+  - تست پینگ و تشخیص پورت‌ها (`TestConnectionModal`)
+  - تخصیص ویلن دسترسی (`AssignVlanModal`)
+  - تاییدیه اعمال دستورات سیسکو (`CiscoCommandConfirmModal`)
+  - هشدار اینترسپتور دستورات خطرناک (`DangerousCommandModal`)
+  - بسته نصبی و راهنمای ویندوز (`WindowsInstallerModal`)
+  - تاریخچه تغییرات و نسخه‌ها (`ReleaseNotesModal`)
+  - پیش‌نمایش تغییرات پورت سوئیچ (`PortChangePreviewModal`)
+- **پوشش کارت‌ها و بخش‌های تحلیلی (Key Cards & Views):**
+  - کارت فیس‌پلیت سخت‌افزاری سوئیچ (`card-port-faceplate`)
+  - کارت اعمال تنظیمات گروهی پورت‌ها (`card-batch-config`)
+  - کارت ویرایش و مشخصات تفصیلی پورت (`card-port-detail`)
+  - کارت جدول تجهیزات و سرورها (`card-device-table`)
+  - نوار ابزار و کنترل‌های بوم شماتیک (`card-schematic-canvas`)
+  - کارت کتابخانه الگوهای پیکربندی (`card-template-library`)
+  - کارت اسکنر همسایگی CDP/LLDP (`card-cdp-scanner`)
+  - کارت داشبورد پایش شبکه (`module-dashboard`)
+
 ---
 
 ## ساختار معماری و تکنولوژی‌ها
@@ -263,6 +292,36 @@ npm start
   - Related client service methods (e.g. `updatePortConfig`, `fetchDevices`).
   - Backend API endpoints and routes (e.g. `PUT /api/devices/:id/ports/:portId`).
 - **One-Click Target Token Copying:** Quick copy button formatted specifically for AI coding prompts (e.g. `[TARGET: ports] - Modify src/components/PortManagementView.tsx`), allowing users to point directly to the exact file and component when requesting modifications.
+
+### 12. Omnipresent Workflow Badges on All Modals & Cards
+- **Seamless Architecture Visibility Across the Entire Platform:**
+  - Integrated `WorkflowTriggerBadge` buttons across the headers of every single modal dialog and primary view card.
+  - Allows engineers to immediately inspect which component renders each modal or card, what endpoints it triggers, and copy the AI coding prompt directly from that view.
+- **Full Modal Coverage:**
+  - Add New Device Modal (`AddDeviceModal`)
+  - Cisco Terminal Console (`CiscoTerminalModal`)
+  - Port Physical Inspector (`PortInspectorModal`)
+  - Subnet Auto-Scanner (`LanScannerModal`)
+  - Apply Configuration Template (`ApplyTemplateModal`)
+  - Template Editor (`TemplateEditorModal`)
+  - Clone / Duplicate Template (`CloneTemplateModal`)
+  - Extract Live Config (`CaptureConfigModal`)
+  - Port & Ping Reachability Tester (`TestConnectionModal`)
+  - Fast Access VLAN Assignment (`AssignVlanModal`)
+  - Cisco Command Execution Confirmation (`CiscoCommandConfirmModal`)
+  - Dangerous Command Security Interceptor (`DangerousCommandModal`)
+  - Windows Automation Setup Guide (`WindowsInstallerModal`)
+  - Changelog & Release Notes (`ReleaseNotesModal`)
+  - Real Switch Configuration Preview (`PortChangePreviewModal`)
+- **Key Cards & Analytical Views:**
+  - Hardware Switch Faceplate (`card-port-faceplate`)
+  - Batch Interface Operations (`card-batch-config`)
+  - Detailed Port Configuration (`card-port-detail`)
+  - Device Inventory Table (`card-device-table`)
+  - Schematic Canvas Toolbar (`card-schematic-canvas`)
+  - Configuration Template Library (`card-template-library`)
+  - CDP/LLDP Topology Scanner (`card-cdp-scanner`)
+  - Central Network Health Dashboard (`module-dashboard`)
 
 ---
 

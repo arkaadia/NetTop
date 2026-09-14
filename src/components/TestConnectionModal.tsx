@@ -17,6 +17,7 @@ import {
 import { Device, DeviceConnectionTestResult } from '../types';
 import { testDeviceConnection, testRawIpConnection } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
+import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 
 interface TestConnectionModalProps {
   device: Device | null;
@@ -102,13 +103,16 @@ export const TestConnectionModal: React.FC<TestConnectionModalProps> = ({
               </p>
             </div>
           </div>
-          <button
-            id="close-test-connection-modal"
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <WorkflowTriggerBadge targetId="modal-test-connection" />
+            <button
+              id="close-test-connection-modal"
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Modal Body */}

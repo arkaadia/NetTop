@@ -31,6 +31,7 @@ import { ApplyTemplateModal } from './ApplyTemplateModal';
 import { CloneTemplateModal } from './CloneTemplateModal';
 import { CaptureConfigModal } from './CaptureConfigModal';
 import { useLanguage } from '../i18n';
+import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 
 interface TemplateManagementViewProps {
   devices: Device[];
@@ -234,6 +235,8 @@ export const TemplateManagementView: React.FC<TemplateManagementViewProps> = ({
 
         {/* Top Action Buttons - Unified size with DeviceListView: px-3.5 py-1.5 rounded-xl text-xs font-medium gap-1.5 */}
         <div className="flex items-center flex-wrap gap-2">
+          <WorkflowTriggerBadge targetId="card-template-library" variant="card" />
+
           {/* Extract Live Config Button */}
           <button
             onClick={() => setCaptureModalOpen(true)}

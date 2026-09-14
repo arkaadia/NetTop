@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertTriangle, ShieldAlert, X, Check, ArrowRight } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
+import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 
 interface DangerousCommandModalProps {
   isOpen: boolean;
@@ -45,12 +46,15 @@ export const DangerousCommandModal: React.FC<DangerousCommandModalProps> = ({
               </p>
             </div>
           </div>
-          <button
-            onClick={onCancel}
-            className="text-rose-400 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-100 transition cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <WorkflowTriggerBadge targetId="modal-dangerous-command" />
+            <button
+              onClick={onCancel}
+              className="text-rose-400 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-100 transition cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}

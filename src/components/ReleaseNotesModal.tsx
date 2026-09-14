@@ -2,6 +2,7 @@ import React from 'react';
 import { Tag, Sparkles, X, Calendar, CheckCircle2, History } from 'lucide-react';
 import { APP_VERSION, RELEASE_HISTORY } from '../version';
 import { useLanguage } from '../i18n/LanguageContext';
+import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 
 interface ReleaseNotesModalProps {
   isOpen: boolean;
@@ -38,13 +39,16 @@ export const ReleaseNotesModal: React.FC<ReleaseNotesModalProps> = ({ isOpen, on
               <p className="text-xs text-slate-400 mt-0.5">{t('release_notes_subtitle')}</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition"
-            aria-label={t('action_close')}
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <WorkflowTriggerBadge targetId="modal-release-notes" />
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+              aria-label={t('action_close')}
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Content List (Scrollable) */}

@@ -25,6 +25,7 @@ import {
 import { Device, DeviceType } from '../types';
 import { useLanguage } from '../i18n';
 import { TestConnectionModal } from './TestConnectionModal';
+import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 
 interface DeviceListViewProps {
   devices: Device[];
@@ -151,6 +152,8 @@ export const DeviceListView: React.FC<DeviceListViewProps> = ({
               <span>{isEn ? 'Windows Setup' : 'نصب ویندوز'}</span>
             </button>
           )}
+
+          <WorkflowTriggerBadge targetId="card-device-table" variant="card" />
 
           <button
             onClick={onRefreshAll}

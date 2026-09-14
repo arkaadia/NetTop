@@ -16,6 +16,7 @@ import {
 import { CdpLldpNeighbor } from '../types';
 import { fetchCdpLldpNeighbors, runCdpLldpScan } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
+import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 
 interface CdpLldpScannerViewProps {
   onNavigateToTopology: () => void;
@@ -92,6 +93,7 @@ export const CdpLldpScannerView: React.FC<CdpLldpScannerViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          <WorkflowTriggerBadge targetId="card-cdp-scanner" variant="card" />
           <button
             onClick={handleRunScan}
             disabled={scanning}

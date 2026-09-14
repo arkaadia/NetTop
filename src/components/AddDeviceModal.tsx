@@ -4,6 +4,7 @@ import { Device, DeviceType, ConfigTemplate, DeviceConnectionTestResult, RealSsh
 import { fetchTemplates, testRawIpConnection, testRealSsh, discoverRealSwitch } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
 import { RealSshTerminalModal } from './RealSshTerminalModal';
+import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 
 interface AddDeviceModalProps {
   isOpen: boolean;
@@ -286,13 +287,16 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
               <p className="text-[11px] text-slate-500">{t('add_device_subtitle')}</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition"
-            aria-label={t('action_close')}
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <WorkflowTriggerBadge targetId="modal-add-device" />
+            <button
+              onClick={onClose}
+              className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+              aria-label={t('action_close')}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Modal Form */}

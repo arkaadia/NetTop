@@ -7,6 +7,7 @@ import { CiscoPortContextMenu } from './CiscoPortContextMenu';
 import { CiscoCommandConfirmModal } from './CiscoCommandConfirmModal';
 import { AssignVlanModal } from './AssignVlanModal';
 import { RealSshTerminalModal } from './RealSshTerminalModal';
+import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 import { useLanguage } from '../i18n/LanguageContext';
 
 interface PortInspectorModalProps {
@@ -946,6 +947,8 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
               <Terminal className="w-4 h-4 text-emerald-400" />
               <span className="font-sans font-bold">{isEn ? 'Cisco Terminal' : 'ترمینال سیسکو'}</span>
             </button>
+
+            <WorkflowTriggerBadge targetId="modal-port-inspector" />
 
             <button
               onClick={onClose}

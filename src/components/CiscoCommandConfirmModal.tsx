@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Device, SwitchPort } from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
+import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 
 export interface CiscoCommandConfirmModalProps {
   isOpen: boolean;
@@ -252,12 +253,15 @@ export const CiscoCommandConfirmModal: React.FC<CiscoCommandConfirmModalProps> =
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <WorkflowTriggerBadge targetId="modal-cisco-confirm" />
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Modal Body */}

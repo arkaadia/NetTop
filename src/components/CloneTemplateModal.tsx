@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { ConfigTemplate, TemplateVariable, Device } from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
+import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 
 interface CloneTemplateModalProps {
   isOpen: boolean;
@@ -219,13 +220,16 @@ export const CloneTemplateModal: React.FC<CloneTemplateModalProps> = ({
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition"
-            aria-label={t('action_close')}
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <WorkflowTriggerBadge targetId="modal-clone-template" />
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+              aria-label={t('action_close')}
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Info Banner */}

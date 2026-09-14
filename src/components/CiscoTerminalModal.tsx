@@ -24,6 +24,7 @@ import {
 import { Device, SwitchPort, VlanInfo } from '../types';
 import { fetchDevicePorts, updateSwitchPort, writeMemory, fetchVlans, pingLive } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
+import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 
 interface CiscoTerminalModalProps {
   device: Device | null;
@@ -816,6 +817,8 @@ export const CiscoTerminalModal: React.FC<CiscoTerminalModalProps> = ({
             </div>
 
             {/* Window Controls */}
+            <WorkflowTriggerBadge targetId="modal-cisco-terminal" />
+
             <button
               onClick={() => setIsFullscreen(!isFullscreen)}
               className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition"

@@ -33,6 +33,7 @@ import {
   EyeOff
 } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
+import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 import { parseAnsiToSpans } from '../utils/ansi';
 import { DangerousCommandModal } from './DangerousCommandModal';
 import { updateDevice, fetchDevicePorts, fetchVlans } from '../services/api';
@@ -735,6 +736,8 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
               >
                 {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
               </button>
+
+              <WorkflowTriggerBadge targetId="modal-real-ssh" />
 
               <button
                 onClick={onClose}

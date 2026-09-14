@@ -35,6 +35,7 @@ import {
 } from '../types';
 import { extractConfigFromDevice, createTemplate } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
+import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 
 interface CaptureConfigModalProps {
   isOpen: boolean;
@@ -296,9 +297,11 @@ export const CaptureConfigModal: React.FC<CaptureConfigModalProps> = ({
               </span>
             </div>
 
+            <WorkflowTriggerBadge targetId="modal-capture-config" />
+
             <button
               onClick={onClose}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition"
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
               title={isEn ? 'Close' : 'بستن'}
             >
               <X className="w-5 h-5" />

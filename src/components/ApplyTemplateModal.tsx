@@ -22,6 +22,7 @@ import {
 import { Device, ConfigTemplate, TemplateApplyResult, TemplateExecutionLog } from '../types';
 import { fetchTemplates, applyTemplateToDevice } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
+import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 
 interface ApplyTemplateModalProps {
   isOpen: boolean;
@@ -266,13 +267,16 @@ export const ApplyTemplateModal: React.FC<ApplyTemplateModalProps> = ({
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition"
-            aria-label={t('action_close')}
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <WorkflowTriggerBadge targetId="modal-apply-template" />
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+              aria-label={t('action_close')}
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Workflow Steps Indicator */}

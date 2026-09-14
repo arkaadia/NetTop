@@ -55,6 +55,7 @@ import { CustomMapPortSelectorModal } from './CustomMapPortSelectorModal';
 import { CustomMapLinkConfigModal } from './CustomMapLinkConfigModal';
 import { CustomMapAddDeviceModal } from './CustomMapAddDeviceModal';
 import { CustomMapManageModal } from './CustomMapManageModal';
+import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 
 interface SchematicTopologyViewProps {
   topology: TopologyData | null;
@@ -1906,8 +1907,10 @@ export const SchematicTopologyView: React.FC<SchematicTopologyViewProps> = ({
 
             {/* Canvas Controls */}
             {viewMode === 'schematic' && (
-              <div className="flex items-center gap-1 bg-slate-900/60 border border-white/10 rounded-xl p-1">
-                <button
+              <div className="flex items-center gap-1.5">
+                <WorkflowTriggerBadge targetId="card-schematic-canvas" variant="card" />
+                <div className="flex items-center gap-1 bg-slate-900/60 border border-white/10 rounded-xl p-1">
+                  <button
                   onClick={() => {
                     const newZoom = Math.min(zoom + 0.15, 3.0);
                     setZoom(parseFloat(newZoom.toFixed(2)));
@@ -1954,6 +1957,7 @@ export const SchematicTopologyView: React.FC<SchematicTopologyViewProps> = ({
                     <RotateCcw className="w-3.5 h-3.5" />
                   </button>
                 )}
+                </div>
               </div>
             )}
           </div>

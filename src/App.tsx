@@ -16,6 +16,8 @@ import { ReleaseNotesModal } from './components/ReleaseNotesModal';
 import { LanScannerModal } from './components/LanScannerModal';
 import { WindowsInstallerModal } from './components/WindowsInstallerModal';
 import { ModuleWorkflowModal } from './components/ModuleWorkflowModal';
+import { ComponentWorkflowModal } from './components/ComponentWorkflowModal';
+import { useWorkflow } from './context/WorkflowContext';
 import { Workflow } from 'lucide-react';
 import { APP_VERSION } from './version';
 import { Device, TopologyData } from './types';
@@ -82,6 +84,19 @@ export default function App() {
   const [isLanScannerOpen, setIsLanScannerOpen] = useState(false);
   const [isWindowsInstallerOpen, setIsWindowsInstallerOpen] = useState(false);
   const [isWorkflowModalOpen, setIsWorkflowModalOpen] = useState(false);
+
+  const {
+    isModuleWorkflowOpen,
+    activeModuleTab,
+    openModuleWorkflow,
+    closeModuleWorkflow,
+    setActiveModuleTab: setWorkflowActiveTab
+  } = useWorkflow();
+
+  // Sync active tab to workflow context
+  useEffect(() => {
+    setWorkflowActiveTab(activeTab);
+  }, [activeTab, setWorkflowActiveTab]);
 
   // Fullscreen Topology Mode (Hides Navbar header, sidebar, and footer for 100% canvas view)
   const [isTopologyFullscreen, setIsTopologyFullscreen] = useState(false);
@@ -538,7 +553,7 @@ export default function App() {
       {/* Floating Bottom Quick Action Button for Section Workflow */}
       {!isTopologyFullscreen && (
         <button
-          onClick={() => setIsWorkflowModalOpen(true)}
+          onClick={() => openModuleWorkflow(activeTab)}
           id="floating-workflow-dock-btn"
           className={`fixed bottom-12 ${isRtl ? 'right-4 sm:right-6' : 'left-4 sm:left-6'} z-30 flex items-center gap-2 px-3 py-1.5 rounded-xl spatial-glass border border-cyan-500/40 text-cyan-300 hover:text-white bg-slate-950/85 hover:bg-cyan-950/70 shadow-[0_10px_30px_rgba(0,0,0,0.7),0_0_20px_rgba(0,240,255,0.25)] transition-all duration-300 cursor-pointer active:scale-95 group backdrop-blur-2xl`}
           title={t('action_workflow_title')}
@@ -558,11 +573,17 @@ export default function App() {
         </button>
       )}
 
+      {/* Component Workflow Modal (Universal for all individual modals & cards) */}
+      <ComponentWorkflowModal />
+
       {/* Module Workflow & Architecture Navigator Modal */}
       <ModuleWorkflowModal
-        isOpen={isWorkflowModalOpen}
-        onClose={() => setIsWorkflowModalOpen(false)}
-        currentTab={activeTab}
+        isOpen={isWorkflowModalOpen || isModuleWorkflowOpen}
+        onClose={() => {
+          setIsWorkflowModalOpen(false);
+          closeModuleWorkflow();
+        }}
+        currentTab={activeModuleTab || activeTab}
       />
     </div>
   );

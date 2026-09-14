@@ -7,6 +7,7 @@ import { CiscoCommandConfirmModal } from './CiscoCommandConfirmModal';
 import { AssignVlanModal } from './AssignVlanModal';
 import { NetworkPortSvg } from './NetworkPortSvg';
 import { useLanguage } from '../i18n/LanguageContext';
+import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 
 interface PortManagementViewProps {
   devices: Device[];
@@ -581,6 +582,7 @@ export const PortManagementView: React.FC<PortManagementViewProps> = ({ devices 
                 ? `Switch Faceplate: ${currentDevice?.model || 'Switch'} (${ports.length} Ports)`
                 : `طرح فیزیکی پورت‌های روی بدنه سوئیچ: ${currentDevice?.model || 'سوئیچ'} (${ports.length} پورت)`}
             </span>
+            <WorkflowTriggerBadge targetId="card-port-faceplate" variant="card" />
           </div>
           {/* Legend & Multi-select Hint */}
           <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-400">
@@ -667,6 +669,7 @@ export const PortManagementView: React.FC<PortManagementViewProps> = ({ devices 
             </div>
 
             <div className="flex items-center gap-2">
+              <WorkflowTriggerBadge targetId="card-batch-config" variant="card" />
               <button
                 type="button"
                 onClick={() => setSelectedPortIds(ports.map((p) => p.port_id))}
@@ -867,34 +870,37 @@ export const PortManagementView: React.FC<PortManagementViewProps> = ({ devices 
               </div>
             </div>
 
-            {!isEditing ? (
-              <button
-                onClick={() => startEdit(selectedPort)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 text-xs font-medium shadow-xs transition active:scale-95 cursor-pointer"
-              >
-                <Edit3 className="w-3.5 h-3.5 text-cyan-400" />
-                <span>{isEn ? 'Edit Port Settings' : 'ویرایش تنظیمات پورت'}</span>
-              </button>
-            ) : (
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
+              <WorkflowTriggerBadge targetId="card-port-detail" variant="card" />
+              {!isEditing ? (
                 <button
-                  type="button"
-                  onClick={() => setIsEditing(false)}
-                  className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 text-xs transition active:scale-95 cursor-pointer"
+                  onClick={() => startEdit(selectedPort)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 text-xs font-medium shadow-xs transition active:scale-95 cursor-pointer"
                 >
-                  {t('ports_btn_cancel')}
+                  <Edit3 className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>{isEn ? 'Edit Port Settings' : 'ویرایش تنظیمات پورت'}</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={handleSavePort}
-                  disabled={isSaving}
-                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md transition disabled:opacity-50 border border-emerald-400/40 active:scale-95 cursor-pointer"
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  <span>{isSaving ? (isEn ? 'Applying...' : 'در حال اعمال...') : (isEn ? 'Apply & Save to Port' : 'ذخیره و اعمال روی پورت')}</span>
-                </button>
-              </div>
-            )}
+              ) : (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(false)}
+                    className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 text-xs transition active:scale-95 cursor-pointer"
+                  >
+                    {t('ports_btn_cancel')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSavePort}
+                    disabled={isSaving}
+                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md transition disabled:opacity-50 border border-emerald-400/40 active:scale-95 cursor-pointer"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{isSaving ? (isEn ? 'Applying...' : 'در حال اعمال...') : (isEn ? 'Apply & Save to Port' : 'ذخیره و اعمال روی پورت')}</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* View Mode */}
@@ -1537,13 +1543,16 @@ export const PortManagementView: React.FC<PortManagementViewProps> = ({ devices 
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => setShowPreviewModal(false)}
-                disabled={isSaving}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition cursor-pointer disabled:opacity-50"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                <WorkflowTriggerBadge targetId="modal-port-change-preview" />
+                <button
+                  onClick={() => setShowPreviewModal(false)}
+                  disabled={isSaving}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition cursor-pointer disabled:opacity-50"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {/* Content */}

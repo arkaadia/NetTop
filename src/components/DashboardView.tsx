@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Device, TopologyData } from '../types';
 import { useLanguage } from '../i18n';
+import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 
 interface DashboardViewProps {
   devices: Device[];
@@ -72,6 +73,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         <div className="flex items-center flex-wrap gap-2.5 relative z-10">
+          <WorkflowTriggerBadge targetId="module-dashboard" variant="card" />
+
           <button
             onClick={onOpenAddModal}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white font-medium text-xs shadow-[0_0_20px_rgba(99,102,241,0.35)] transition border border-white/15 active:scale-95 cursor-pointer"
