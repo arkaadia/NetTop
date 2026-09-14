@@ -102,6 +102,17 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
   - `start_windows.bat`: راه‌اندازی سریع همزمان بک‌اند پایتون و سرور وب و باز کردن خودکار آدرس `http://localhost:3000` در مرورگر پیش‌فرض.
   - `install_windows.ps1`: اسکریپت پاورشل حرفه‌ای برای محیط‌های سازمانی ویندوز.
 
+### ۱۱. دکمه و پنجره تعاملی نمایش جریان‌کاری و معماری هر بخش (Module Workflow & Target Inspector)
+- **کلید دسترسی چندمنظوره (Multi-Access Buttons):**
+  - دکمه شناور در لبه پایین صفحه (`floating-workflow-dock-btn`) با افکت شیشه‌ای، انیمیشن پالس و نشانگر ماژول فعال.
+  - دکمه نوار وضعیت فوتر پایین (`bottom-bar-workflow-btn`) با برچسب بخش جاری.
+  - دکمه اختصاصی در هدر بالا (`Navbar`) و منوی آبشاری پروفایل کاربری.
+- **تشخیص هوشمند بخش فعال:** نمایش خودکار جریان‌کاری (Workflow) همان صفحه‌ای که کاربر در آن قرار دارد (مانند پورت‌ها، داشبورد، لیست تجهیزات، توپولوژی، الگوها، اسکنر و...).
+- **مشاهده فایل‌ها و اندپوینت‌های دقیق برای درخواست تغییرات:**
+  - لیست فایل‌های فرانت‌اند (`Component File`)
+  - سرویس‌های متصل و توابع API (`Service Method`)
+  - اندپوینت‌های بک‌اند سرور (`Backend Endpoint`)
+- **کلید کپی سریع پرامپت (Copy Target Token):** دکمه تک‌کلیک جهت کپی کردن فرمت دقیق درخواست به هوش مصنوعی (مثل `[TARGET: ports] - Modify src/components/PortManagementView.tsx`) جهت ارائه دستورات شفاف برای اعمال تغییرات بعدی بدون ابهام.
 
 ---
 
@@ -113,33 +124,36 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
 
 ---
 
-## راهنمای نصب و راه‌اندازی
+## راهنمای نصب و راه‌اندازی روی لینوکس (Linux Installation)
 
 ### پیش‌نیازها
 - Node.js نسخه 18 یا بالاتر (یا Bun)
 - مدیر بسته `npm` یا `bun`
+- پایتون 3 (اختیاری برای اسکریپت‌های اتوماسیون سیسکو): `python3`, `python3-pip`
 
-### مراحل نصب
+### مراحل نصب گام‌به‌گام
 ```bash
-# کلون کردن ریپازیتوری
-git clone https://github.com/shahbazimasoud/NetTopology.git
-cd NetTopology
+# ۱. کلون کردن ریپازیتوری
+git clone https://github.com/arkaadia/NetTop.git
+cd NetTop
 
-# نصب وابستگی‌ها
+# ۲. نصب وابستگی‌های Node.js
 npm install
-# یا با بون:
-bun install
+# یا در صورت استفاده از Bun:
+# bun install
 
-# اجرای محیط توسعه (Development Server)
+# ۳. اجرای اسکریپت نصب کامل (اختیاری):
+chmod +x install.sh start.sh stop.sh restart.sh
+./install.sh
+
+# ۴. اجرای برنامه در حالت توسعه (Development Mode)
 npm run dev
-```
-برنامه روی آدرس `http://localhost:3000` اجرا خواهد شد.
 
-### بیلد پروداکشن (Production Build)
-```bash
+# یا اجرای پایدار بیلد پروداکشن (Production Mode):
 npm run build
 npm start
 ```
+برنامه روی آدرس `http://localhost:3000` (یا آی‌پی سرور شما: `http://SERVER_IP:3000`) در دسترس خواهد بود.
 
 ---
 
@@ -238,6 +252,17 @@ npm start
   - `start_windows.bat`: One-click startup for both Python backend and Vite/Express server, auto-launching `http://localhost:3000` in the default browser.
   - `install_windows.ps1`: Modern PowerShell deployment script for Windows enterprise environments.
 
+### 11. Interactive Module Workflow & Architecture Inspector Modal
+- **Multi-Access Workflow Triggers:**
+  - Floating bottom-docked quick-action button (`floating-workflow-dock-btn`) with glassmorphism styling, live pulse indicator, and active section badge.
+  - Bottom status-bar trigger button (`bottom-bar-workflow-btn`) indicating the current module.
+  - Top header Navbar action button (`navbar-workflow-btn`) and Profile menu integration.
+- **Smart Active Tab Detection:** Automatically detects the user's active view (Ports, Dashboard, Devices, Schematic Topology, Config Templates, CDP/LLDP Scanner, etc.) and presents its specific step-by-step workflow.
+- **Precise Architecture & Source Mapping:**
+  - Frontend component file paths (e.g. `src/components/PortManagementView.tsx`).
+  - Related client service methods (e.g. `updatePortConfig`, `fetchDevices`).
+  - Backend API endpoints and routes (e.g. `PUT /api/devices/:id/ports/:portId`).
+- **One-Click Target Token Copying:** Quick copy button formatted specifically for AI coding prompts (e.g. `[TARGET: ports] - Modify src/components/PortManagementView.tsx`), allowing users to point directly to the exact file and component when requesting modifications.
 
 ---
 
@@ -249,33 +274,36 @@ npm start
 
 ---
 
-## Installation & Setup
+## Installation & Setup (Linux)
 
 ### Prerequisites
 - Node.js 18+ (or Bun)
 - npm or bun package manager
+- Python 3 (Optional for switch automation scripts): `python3`, `python3-pip`
 
-### Getting Started
+### Step-by-Step Installation
 ```bash
-# Clone the repository
-git clone https://github.com/shahbazimasoud/NetTopology.git
-cd NetTopology
+# 1. Clone the repository
+git clone https://github.com/arkaadia/NetTop.git
+cd NetTop
 
-# Install dependencies
+# 2. Install Node dependencies
 npm install
 # Or with Bun:
-bun install
+# bun install
 
-# Start development server
+# 3. Run helper install script (optional):
+chmod +x install.sh start.sh stop.sh restart.sh
+./install.sh
+
+# 4. Start development server
 npm run dev
-```
-Open `http://localhost:3000` in your web browser.
 
-### Building for Production
-```bash
+# Or compile and run production server:
 npm run build
 npm start
 ```
+Open `http://localhost:3000` (or `http://YOUR_SERVER_IP:3000`) in your web browser.
 
 ---
 

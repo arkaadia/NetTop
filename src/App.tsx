@@ -15,6 +15,8 @@ import { ApplyTemplateModal } from './components/ApplyTemplateModal';
 import { ReleaseNotesModal } from './components/ReleaseNotesModal';
 import { LanScannerModal } from './components/LanScannerModal';
 import { WindowsInstallerModal } from './components/WindowsInstallerModal';
+import { ModuleWorkflowModal } from './components/ModuleWorkflowModal';
+import { Workflow } from 'lucide-react';
 import { APP_VERSION } from './version';
 import { Device, TopologyData } from './types';
 import {
@@ -79,6 +81,7 @@ export default function App() {
   const [isReleaseNotesOpen, setIsReleaseNotesOpen] = useState(false);
   const [isLanScannerOpen, setIsLanScannerOpen] = useState(false);
   const [isWindowsInstallerOpen, setIsWindowsInstallerOpen] = useState(false);
+  const [isWorkflowModalOpen, setIsWorkflowModalOpen] = useState(false);
 
   // Fullscreen Topology Mode (Hides Navbar header, sidebar, and footer for 100% canvas view)
   const [isTopologyFullscreen, setIsTopologyFullscreen] = useState(false);
@@ -285,6 +288,7 @@ export default function App() {
           onOpenReleaseNotes={() => setIsReleaseNotesOpen(true)}
           onOpenLanScanner={() => setIsLanScannerOpen(true)}
           onOpenWindowsInstaller={() => setIsWindowsInstallerOpen(true)}
+          onOpenWorkflow={() => setIsWorkflowModalOpen(true)}
         />
       )}
 
@@ -392,6 +396,20 @@ export default function App() {
             </span>
           </div>
           <div className="flex items-center gap-2">
+            {/* Bottom Bar Workflow Button */}
+            <button
+              onClick={() => setIsWorkflowModalOpen(true)}
+              id="bottom-bar-workflow-btn"
+              className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/30 text-indigo-300 hover:text-cyan-300 border border-indigo-400/30 transition text-[11px] font-medium shadow-[0_0_8px_rgba(99,102,241,0.25)] cursor-pointer active:scale-95"
+              title={t('action_workflow_title')}
+            >
+              <Workflow className="w-3 h-3 text-indigo-400 animate-pulse" />
+              <span className="font-sans">{t('action_workflow')}</span>
+              <span className="text-[10px] font-mono text-cyan-300/80 bg-white/5 px-1 rounded uppercase">
+                {activeTab}
+              </span>
+            </button>
+
             <button
               onClick={() => setIsReleaseNotesOpen(true)}
               className="font-mono text-slate-400 hover:text-cyan-300 text-[10px] hidden sm:flex items-center gap-1.5 transition cursor-pointer"
@@ -515,6 +533,36 @@ export default function App() {
       <WindowsInstallerModal
         isOpen={isWindowsInstallerOpen}
         onClose={() => setIsWindowsInstallerOpen(false)}
+      />
+
+      {/* Floating Bottom Quick Action Button for Section Workflow */}
+      {!isTopologyFullscreen && (
+        <button
+          onClick={() => setIsWorkflowModalOpen(true)}
+          id="floating-workflow-dock-btn"
+          className={`fixed bottom-12 ${isRtl ? 'right-4 sm:right-6' : 'left-4 sm:left-6'} z-30 flex items-center gap-2 px-3 py-1.5 rounded-xl spatial-glass border border-cyan-500/40 text-cyan-300 hover:text-white bg-slate-950/85 hover:bg-cyan-950/70 shadow-[0_10px_30px_rgba(0,0,0,0.7),0_0_20px_rgba(0,240,255,0.25)] transition-all duration-300 cursor-pointer active:scale-95 group backdrop-blur-2xl`}
+          title={t('action_workflow_title')}
+        >
+          <div className="p-1 rounded-lg bg-cyan-500/20 text-cyan-400 group-hover:rotate-12 transition shadow-[0_0_8px_rgba(0,240,255,0.4)]">
+            <Workflow className="w-3.5 h-3.5" />
+          </div>
+          <div className="flex flex-col text-left rtl:text-right pr-0.5 rtl:pr-0 rtl:pl-0.5">
+            <span className="text-[11px] font-bold text-white leading-tight flex items-center gap-1.5">
+              <span>{t('action_workflow')}</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_rgba(52,211,153,0.9)]" />
+            </span>
+            <span className="text-[9px] font-mono text-cyan-400 font-medium uppercase">
+              {activeTab} module
+            </span>
+          </div>
+        </button>
+      )}
+
+      {/* Module Workflow & Architecture Navigator Modal */}
+      <ModuleWorkflowModal
+        isOpen={isWorkflowModalOpen}
+        onClose={() => setIsWorkflowModalOpen(false)}
+        currentTab={activeTab}
       />
     </div>
   );

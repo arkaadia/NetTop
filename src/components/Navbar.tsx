@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { RefreshCw, Zap, Palette, ChevronDown, Check, Globe, User, ShieldCheck, FileText, Radar, Laptop } from 'lucide-react';
+import { RefreshCw, Zap, Palette, ChevronDown, Check, Globe, User, ShieldCheck, FileText, Radar, Laptop, Workflow } from 'lucide-react';
 import { APP_VERSION } from '../version';
 import { useLanguage } from '../i18n';
 
@@ -18,6 +18,7 @@ interface NavbarProps {
   onOpenReleaseNotes?: () => void;
   onOpenLanScanner?: () => void;
   onOpenWindowsInstaller?: () => void;
+  onOpenWorkflow?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -31,6 +32,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenReleaseNotes,
   onOpenLanScanner,
   onOpenWindowsInstaller,
+  onOpenWorkflow,
 }) => {
   const { t, language, setLanguage, isRtl, isEn } = useLanguage();
   const [profileOpen, setProfileOpen] = useState(false);
@@ -107,6 +109,19 @@ export const Navbar: React.FC<NavbarProps> = ({
           <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin text-indigo-400' : ''}`} />
           <span className="hidden lg:inline">{t('action_live_ping')}</span>
         </button>
+
+        {/* Module Workflow & Architecture Inspector Button */}
+        {onOpenWorkflow && (
+          <button
+            onClick={onOpenWorkflow}
+            id="navbar-workflow-btn"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 hover:text-white border border-indigo-400/40 text-xs font-medium transition shadow-[0_0_12px_rgba(99,102,241,0.2)] active:scale-95 cursor-pointer"
+            title={t('action_workflow_title')}
+          >
+            <Workflow className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+            <span className="hidden sm:inline">{t('action_workflow')}</span>
+          </button>
+        )}
 
         {/* Reset Demo Data */}
         <button
@@ -262,6 +277,19 @@ export const Navbar: React.FC<NavbarProps> = ({
 
                 {/* Section 3: LAN Scanner & Windows Installer Tools */}
                 <div className="mb-3 pt-2 border-t border-white/10 space-y-1">
+                  {onOpenWorkflow && (
+                    <button
+                      onClick={() => {
+                        setProfileOpen(false);
+                        onOpenWorkflow();
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs text-slate-200 hover:text-white hover:bg-indigo-500/20 border border-transparent hover:border-indigo-500/30 transition cursor-pointer"
+                    >
+                      <Workflow className="w-3.5 h-3.5 text-indigo-400" />
+                      <span className="font-medium">{t('action_workflow')}</span>
+                    </button>
+                  )}
+
                   {onOpenLanScanner && (
                     <button
                       onClick={() => {

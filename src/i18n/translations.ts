@@ -47,6 +47,8 @@ export const translations = {
     action_quick_scan_title: 'Scan CDP and LLDP protocols for neighbor discovery',
     action_live_ping: 'Live Ping',
     action_live_ping_title: 'Check and ping all devices in real-time',
+    action_workflow: 'Workflow',
+    action_workflow_title: 'View module workflow, components, APIs and copy targets for changes',
     action_demo_data: 'Demo Data',
     action_demo_data_title: 'Reset network data to default enterprise seed',
 
@@ -655,6 +657,8 @@ export const translations = {
     action_quick_scan_title: 'اسکن پروتکل‌های CDP و LLDP برای همسایگی‌ها',
     action_live_ping: 'پایش لحظه‌ای',
     action_live_ping_title: 'پایش و پینگ لحظه‌ای تمام تجهیزات',
+    action_workflow: 'جریان‌کاری (Workflow)',
+    action_workflow_title: 'مشاهده معماری ماژول، فایل‌ها، اندپوینت‌ها و کپی شناسه برای تغییرات',
     action_demo_data: 'داده‌های نمونه',
     action_demo_data_title: 'بازنشانی داده‌های نمونه سازمانی',
 
