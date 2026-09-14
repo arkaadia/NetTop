@@ -42,8 +42,8 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
 - **ویرایش مستقیم از جدول پورت‌ها (All Switch Ports):** با کلیک روی دکمه Edit در هر سطر جدول، فرم ویرایش فعال شده و صفحه با اسکرول نرم خودکار به سمت کارت پیکربندی هدایت می‌شود.
 - **اتصال مستقیم تغییرات پورت به سوئیچ واقعی از طریق SSH (Real Switch Direct Configuration via SSH):**
   - تمامی تغییرات اعمال‌شده در فرانت‌اند (تغییر VLAN ID، مد Access/Trunk، ویلن‌های مجاز Allowed VLANs، وضعیت Port Security، Admin Status و Description) مستقیماً از مسیر `Frontend -> API -> Backend -> SSH Service -> Real Cisco Switch` عبور کرده و روی اینترفیس فیزیکی سوئیچ اعمال می‌شوند.
-  - **اعمال آنی و مستقیم بدون مرحله تاییدیه اضافه (Direct One-Click Save):** حذف پنجره و دکمه‌های تاییدیه CLI Diff & Confirm برای بالا بردن سرعت عملیات مدیران شبکه؛ تغییرات بلافاصله با کلیک روی دکمه «ذخیره و اعمال روی پورت» از طریق اندپوینت `POST /api/ssh/apply-port-config` مستقیماً به سوئیچ فیزیکی ارسال می‌شوند.
-  - **پایداری وضعیت و عدم به‌روزرسانی زودهنگام:** کلید اعمال پیکربندی حین اجرا با وضعیت «Applying configuration...» غیرفعال شده و تنها پس از دریافت تایید موفقیت قطعی از سوئیچ واقعی، رابط کاربری به‌روزرسانی و اطلاعات مجدداً از سوئیچ بارگذاری می‌گردند؛ در صورت بروز خطا، مقادیر فرم به حالت قبل بازمی‌گردند.
+  - **ریویو و پیش‌نمایش دستورات پیش از اعمال نهایی (Review & Confirmation Modal):** با کلیک روی دکمه «ذخیره و اعمال روی پورت» (Apply & Save to Port)، یک پنجره مودال شیشه‌ای با بلور پس‌زمینه نمایش داده می‌شود که مشخصات سوئیچ و اینترفیس، جدول مقایسه مقادیر قبلی و جدید (VLAN, Port Security, Mode, Admin Status)، پیکربندی تمیز اینترفیس و نشست کامل دستورات ارسالی SSH سیسکو را برای بازبینی دقیق مهندس شبکه فراهم می‌کند و تنها پس از تایید نهایی کاربر، دستورات به سوئیچ فیزیکی ارسال می‌شوند.
+  - **پایداری وضعیت و عدم به‌روزرسانی زودهنگام:** کلید اعمال پیکربندی حین اجرا با وضعیت «Applying to Switch...» غیرفعال شده و تنها پس از دریافت تایید موفقیت قطعی از سوئیچ واقعی، رابط کاربری به‌روزرسانی و اطلاعات مجدداً از سوئیچ بارگذاری می‌گردند؛ در صورت بروز خطا، مقادیر فرم به حالت قبل بازمی‌گردند.
 
 ### ۲. امنیت پورت لایه ۲ سیسکو (Cisco Port Security)
 - **فعال‌سازی با کلید تعاملی با کنتراست بالا:** اعمال پیکربندی `switchport port-security` روی پورت‌های اکسس.
@@ -221,8 +221,8 @@ npm start
 - **All Switch Ports Table Integration:** Clicking **Edit** on any port row instantly opens the configuration form and automatically executes a smooth scroll to the active edit card.
 - **Real-Switch Direct Configuration via SSH:**
   - All port configuration edits (VLAN ID, Access/Trunk mode, Allowed VLANs, Port Security parameters, Admin Status, and Description) route through `Frontend -> API -> Backend -> SSH Service -> Real Cisco Switch`, applying directly to the hardware switch interface.
-  - **Direct One-Click Configuration Push:** Removal of the intermediate CLI Diff & Confirmation popup; configurations are applied instantly with a single click on "Apply & Save to Port", dispatching live commands directly to the hardware switch via `POST /api/ssh/apply-port-config`.
-  - **Reliable State Enforcement & Deferred UI Updates:** The apply action shows "Applying configuration..." with disabled buttons until the switch explicitly returns success. Upon execution failure, the UI rolls back to previous state without desynchronizing from the physical switch.
+  - **Review Changes & Command Preview Prior to Execution (Review & Confirmation Modal):** Clicking **Apply & Save to Port** triggers a spatial glassmorphic confirmation modal featuring target device and interface details, a side-by-side diff table of previous vs. new values (VLAN ID, Port Security parameters, Mode, Admin Status), clean interface configuration, and full Cisco IOS-XE SSH CLI command stream. Only upon explicit user confirmation are live commands sent to the physical switch.
+  - **Reliable State Enforcement & Deferred UI Updates:** The apply action shows "Applying to Switch..." with disabled buttons until the switch explicitly returns success. Upon execution failure, the UI rolls back to previous state without desynchronizing from the physical switch.
 
 ### 2. Cisco Layer-2 Port Security Management
 - **One-Touch Port Security Toggle:** Effortlessly apply `switchport port-security` with dedicated high-contrast controls.
