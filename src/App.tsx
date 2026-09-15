@@ -17,6 +17,7 @@ import { LanScannerModal } from './components/LanScannerModal';
 import { WindowsInstallerModal } from './components/WindowsInstallerModal';
 import { ModuleWorkflowModal } from './components/ModuleWorkflowModal';
 import { ComponentWorkflowModal } from './components/ComponentWorkflowModal';
+import { NetworkAutomationView } from './components/automation/NetworkAutomationView';
 import { useWorkflow } from './context/WorkflowContext';
 import { Workflow } from 'lucide-react';
 import { APP_VERSION } from './version';
@@ -388,6 +389,12 @@ export default function App() {
 
           {activeTab === 'scanner' && (
             <CdpLldpScannerView onNavigateToTopology={() => setActiveTab('schematic')} />
+          )}
+
+          {activeTab === 'automation' && (
+            <div className="p-4 lg:p-6">
+              <NetworkAutomationView devices={devices} />
+            </div>
           )}
         </main>
       </div>

@@ -68,6 +68,8 @@ export const translations = {
     parent_infra_tag: 'INFRA',
     parent_monitor_title: 'Monitoring & Analysis',
     parent_monitor_tag: 'MONITOR',
+    parent_automation_title: 'Network Automation',
+    parent_automation_tag: 'AUTO',
 
     // Sidebar Children Items
     tab_dashboard: 'Network Dashboard',
@@ -76,6 +78,7 @@ export const translations = {
     tab_templates: 'Config Templates & Patterns',
     tab_ports: 'Ports & VLANs Telemetry',
     tab_scanner: 'CDP/LLDP Discovery Scanner',
+    tab_automation: 'Network Automation (Cisco / MikroTik)',
 
     // Footer
     footer_network_status: 'Network Status:',
@@ -678,6 +681,8 @@ export const translations = {
     parent_infra_tag: 'INFRA',
     parent_monitor_title: 'پایش و آنالیز',
     parent_monitor_tag: 'MONITOR',
+    parent_automation_title: 'اتوماسیون شبکه',
+    parent_automation_tag: 'AUTO',
 
     // Sidebar Children Items
     tab_dashboard: 'داشبورد وضعیت شبکه',
@@ -686,6 +691,7 @@ export const translations = {
     tab_templates: 'الگوها و تمپلیت‌ها (Template)',
     tab_ports: 'پایش پورت‌ها و ویلن‌ها',
     tab_scanner: 'اسکن همسایگی CDP/LLDP',
+    tab_automation: 'اتوماسیون تجهیزات (سیسکو / میکروتیک)',
 
     // Footer
     footer_network_status: 'وضعیت شبکه:',

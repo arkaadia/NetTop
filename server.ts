@@ -258,6 +258,94 @@ app.post('/api/ssh/apply-port-config', handlePortConfigExecution);
 app.post('/api/devices/:deviceId/ports/:portId/apply', handlePortConfigExecution);
 app.post('/api/switch/apply-port-config', handlePortConfigExecution);
 
+// Network Automation Engine Endpoints
+import { ConfigEngine } from './server/automation/configEngine';
+const automationEngine = new ConfigEngine(projectRoot);
+
+// 1. Preview & Validation
+app.post('/api/automation/preview', async (req: Request, res: Response) => {
+  try {
+    const task = req.body;
+    if (!task || !task.deviceId || !task.category) {
+      return res.status(400).json({ error: 'deviceId and category are required.' });
+    }
+    const result = await automationEngine.preview(task);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[Automation Preview Error]:', err);
+    res.status(500).json({ error: err.message || 'Failed to generate automation preview.' });
+  }
+});
+
+// 2. Full Apply Execution with Pre-Backup and Post-Verification
+app.post('/api/automation/apply', async (req: Request, res: Response) => {
+  try {
+    const { task, autoRollbackOnFailure, user } = req.body || {};
+    if (!task || !task.deviceId || !task.category) {
+      return res.status(400).json({ error: 'Valid automation task payload is required.' });
+    }
+    const result = await automationEngine.apply(task, { autoRollbackOnFailure: !!autoRollbackOnFailure, user: user || 'admin' });
+    res.json(result);
+  } catch (err: any) {
+    console.error('[Automation Apply Error]:', err);
+    res.status(500).json({ error: err.message || 'Failed to apply automation configuration.' });
+  }
+});
+
+// 3. Rollback
+app.post('/api/automation/rollback', async (req: Request, res: Response) => {
+  try {
+    const { deviceId, backupId, commands } = req.body || {};
+    if (!deviceId) {
+      return res.status(400).json({ error: 'deviceId is required for rollback.' });
+    }
+    const result = await automationEngine.rollback(deviceId, backupId, commands);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[Automation Rollback Error]:', err);
+    res.status(500).json({ error: err.message || 'Rollback execution failed.' });
+  }
+});
+
+// 4. Security Audit & Scoring
+app.get('/api/automation/security-audit/:deviceId', async (req: Request, res: Response) => {
+  try {
+    const deviceId = req.params.deviceId;
+    const report = await automationEngine.runSecurityAudit(deviceId);
+    res.json(report);
+  } catch (err: any) {
+    console.error('[Automation Audit Error]:', err);
+    res.status(500).json({ error: err.message || 'Failed to generate security audit.' });
+  }
+});
+
+// 5. Backups Catalog
+app.get('/api/automation/backups', (req: Request, res: Response) => {
+  try {
+    const deviceId = req.query.deviceId as string | undefined;
+    const backups = automationEngine.getBackupManager().getBackups(deviceId);
+    res.json(backups);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 6. Audit Trail Logs
+app.get('/api/automation/audit', (req: Request, res: Response) => {
+  try {
+    const { deviceId, vendor, status, q } = req.query;
+    const logs = automationEngine.getAuditLogger().getLogs({
+      deviceId: deviceId as string,
+      vendor: vendor as string,
+      status: status as string,
+      query: q as string
+    });
+    res.json(logs);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Proxy other /api/* requests to Python HTTP server
 app.use('/api', (req: Request, res: Response) => {
   const options: http.RequestOptions = {

@@ -10,11 +10,12 @@ import {
   ChevronDown,
   FileCode2,
   Layers,
-  Activity
+  Activity,
+  Cpu
 } from 'lucide-react';
 import { useLanguage } from '../i18n';
 
-export type ActiveTab = 'dashboard' | 'devices' | 'schematic' | 'templates' | 'ports' | 'scanner';
+export type ActiveTab = 'dashboard' | 'devices' | 'schematic' | 'templates' | 'ports' | 'scanner' | 'automation';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -34,7 +35,7 @@ interface NavItem {
 }
 
 interface NavParentGroup {
-  id: 'infra' | 'monitor';
+  id: 'infra' | 'monitor' | 'automation';
   titleKey: string;
   tagKey: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -105,6 +106,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
           labelKey: 'tab_scanner',
           icon: Radar,
           badge: null,
+        },
+      ],
+    },
+    {
+      id: 'automation',
+      titleKey: 'parent_automation_title',
+      tagKey: 'parent_automation_tag',
+      icon: Cpu,
+      colorClass: 'text-violet-400 border-violet-500/30 bg-violet-500/10',
+      items: [
+        {
+          id: 'automation',
+          labelKey: 'tab_automation',
+          icon: Cpu,
+          badge: 'SSH',
         },
       ],
     },

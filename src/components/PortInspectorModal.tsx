@@ -60,9 +60,8 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
 
   const [availableVlans, setAvailableVlans] = useState<VlanInfo[]>([]);
 
-  // Confirmation Summary Modal state (Review before apply)
+  // Confirmation Summary Modal state
   const [showConfirmSummary, setShowConfirmSummary] = useState(false);
-
   const [isWritingMem, setIsWritingMem] = useState(false);
 
   // Right-click action confirmation modal state (Yes/No with device CLI preview)
@@ -428,13 +427,19 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
     }, 60);
   };
 
-  // When user clicks "Apply & Save to Port", open the Review & Confirmation modal first
+  // Direct Save & Apply immediately to the switch port with mandatory preview
   const handleDirectSave = () => {
     if (!device || !selectedPort) return;
+    // Always open the Configuration Preview Modal before sending commands to real switch
     setShowConfirmSummary(true);
   };
 
-  // Called after user confirms in the Review & Preview modal: sends commands to real switch via SSH
+  // Called when user clicks "پیش‌نمایش CLI و تایید" -> opens summary modal first
+  const handleOpenSummary = () => {
+    setShowConfirmSummary(true);
+  };
+
+  // Called after user confirms in the Configuration Preview modal
   const handleConfirmSave = async () => {
     if (!device || !selectedPort) return;
     try {
@@ -594,7 +599,9 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
     }
   };
 
-  // Build list of changed properties for the review/summary modal
+  if (!isOpen || !device) return null;
+
+  // Build list of changed properties for the summary modal
   const changedFields: { label: string; oldVal: string; newVal: string }[] = [];
   if (selectedPort) {
     if (selectedPort.admin_status !== editAdminStatus) {
@@ -701,7 +708,7 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
     }
   }
 
-  // Generate Cisco CLI commands preview for the review modal
+  // Generate Cisco CLI commands preview
   const generateCiscoCommands = () => {
     if (!selectedPort) return '';
     const lines = [
@@ -718,6 +725,7 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
       lines.push(`${device.name}(config-if)# switchport access vlan ${editVlan}`);
     }
 
+    // Cisco Port Security commands
     if (editPortSecEnabled) {
       if (editMode !== 'access') {
         lines.push(`${device.name}(config-if)# switchport mode access`);
@@ -743,52 +751,8 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
       lines.push(`${device.name}(config-if)# description ${editDesc}`);
     }
     lines.push(`${device.name}(config-if)# exit`);
-    lines.push(`${device.name}(config)# end`);
     return lines.join('\n');
   };
-
-  // Clean Configuration preview script for the review modal
-  const generateCleanConfigPreview = () => {
-    if (!selectedPort) return '';
-    const lines: string[] = [
-      `interface ${selectedPort.port_id}`,
-    ];
-    if (editMode === 'trunk') {
-      lines.push('switchport mode trunk');
-      if (editAllowedVlans) {
-        lines.push(`switchport trunk allowed vlan ${editAllowedVlans}`);
-      }
-    } else {
-      lines.push('switchport mode access');
-      lines.push(`switchport access vlan ${editVlan}`);
-    }
-    if (editPortSecEnabled) {
-      if (editMode !== 'access') {
-        lines.push('switchport mode access');
-      }
-      lines.push('switchport port-security');
-      lines.push(`switchport port-security maximum ${editPortSecMaxMac}`);
-      if (editPortSecMode === 'sticky') {
-        lines.push('switchport port-security mac-address sticky');
-      } else if (editPortSecMode === 'configured' && editPortSecConfiguredMac) {
-        lines.push(`switchport port-security mac-address ${editPortSecConfiguredMac}`);
-      }
-      lines.push(`switchport port-security violation ${editPortSecViolation}`);
-    } else if (selectedPort.port_security_enabled && !editPortSecEnabled) {
-      lines.push('no switchport port-security');
-    }
-    if (editAdminStatus === 'disabled') {
-      lines.push('shutdown');
-    } else {
-      lines.push('no shutdown');
-    }
-    if (editDesc) {
-      lines.push(`description ${editDesc}`);
-    }
-    return lines.join('\n');
-  };
-
-  if (!isOpen || !device) return null;
 
   // Generate raw Cisco CLI commands for direct SSH execution
   const generateRawCiscoCommands = () => {
@@ -835,6 +799,49 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
     cmds.push('end');
     return cmds;
   };
+
+  // Clean Configuration preview matching exact user specification
+  const generateCleanConfigPreview = () => {
+    if (!selectedPort) return '';
+    const lines: string[] = [
+      `interface ${selectedPort.port_id}`,
+    ];
+    if (editMode === 'trunk') {
+      lines.push('switchport mode trunk');
+      if (editAllowedVlans) {
+        lines.push(`switchport trunk allowed vlan ${editAllowedVlans}`);
+      }
+    } else {
+      lines.push('switchport mode access');
+      lines.push(`switchport access vlan ${editVlan}`);
+    }
+    if (editPortSecEnabled) {
+      if (editMode !== 'access') {
+        lines.push('switchport mode access');
+      }
+      lines.push('switchport port-security');
+      lines.push(`switchport port-security maximum ${editPortSecMaxMac}`);
+      if (editPortSecMode === 'sticky') {
+        lines.push('switchport port-security mac-address sticky');
+      } else if (editPortSecMode === 'configured' && editPortSecConfiguredMac) {
+        lines.push(`switchport port-security mac-address ${editPortSecConfiguredMac}`);
+      }
+      lines.push(`switchport port-security violation ${editPortSecViolation}`);
+    } else if (selectedPort.port_security_enabled && !editPortSecEnabled) {
+      lines.push('no switchport port-security');
+    }
+    if (editAdminStatus === 'disabled') {
+      lines.push('shutdown');
+    } else {
+      lines.push('no shutdown');
+    }
+    if (editDesc) {
+      lines.push(`description ${editDesc}`);
+    }
+    return lines.join('\n');
+  };
+
+  if (!isOpen || !device) return null;
 
   const filteredPorts = ports.filter((p) => {
     if (filterMode === 'up' && p.status !== 'up') return false;
@@ -1279,6 +1286,16 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
                     >
                       <Save className="w-3.5 h-3.5" />
                       <span>{isSaving ? (isEn ? 'Applying...' : 'در حال اعمال...') : (isEn ? 'Apply & Save to Port' : 'ذخیره و اعمال روی پورت')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleOpenSummary}
+                      disabled={isSaving}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 text-xs font-medium shadow-xs transition disabled:opacity-50 cursor-pointer"
+                      title={isEn ? 'Review CLI commands preview' : 'پیش‌نمایش دستورات سیسکو'}
+                    >
+                      <Terminal className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>{isEn ? 'CLI Diff & Confirm' : 'پیش‌نمایش CLI و تایید'}</span>
                     </button>
                   </div>
                 )}
@@ -1864,6 +1881,15 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
                         <Save className="w-4 h-4" />
                         <span>{isSaving ? (isEn ? 'Applying...' : 'در حال اعمال...') : (isEn ? 'Apply & Save to Port' : 'ذخیره و اعمال روی پورت')}</span>
                       </button>
+                      <button
+                        type="button"
+                        onClick={handleOpenSummary}
+                        disabled={isSaving}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 text-xs font-medium transition cursor-pointer"
+                      >
+                        <Terminal className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>{isEn ? 'CLI Diff & Confirm' : 'پیش‌نمایش CLI'}</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -2088,7 +2114,7 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
           </div>
         </div>
 
-        {/* Confirmation & Review Summary Modal (ریویو از تغییرات و دستوراتی که اجرا می‌شود قبل از اعمال نهایی) */}
+        {/* Confirmation Summary Modal (سامری تغییرات پورت و تایید نهایی) */}
         {showConfirmSummary && selectedPort && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 modal-backdrop-blur overflow-y-auto" data-modal-backdrop="true" dir={isEn ? 'ltr' : 'rtl'}>
             <div className="spatial-glass border border-white/20 rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden my-auto flex flex-col max-h-[92vh] sm:max-h-[88vh] text-slate-100">
@@ -2096,14 +2122,14 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
               <div className="px-5 py-4 bg-white/5 border-b border-white/10 text-white flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2.5">
                   <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                    <Terminal className="w-5 h-5" />
+                    <Save className="w-5 h-5" />
                   </div>
                   <div>
                     <h3 className="font-bold text-sm text-white">
-                      {isEn ? 'Review Changes & Commands Before Apply' : 'ریویو و تایید نهایی تغییرات و دستورات پورت'}
+                      {isEn ? 'Confirm & Apply Port Configuration Changes' : 'پیش‌نمایش و تایید نهایی تغییرات پورت'}
                     </h3>
                     <p className="text-xs text-slate-400 font-mono mt-0.5">
-                      {device.name} ({device.ip}) • {isEn ? 'Port' : 'پورت'} {selectedPort.name || selectedPort.port_id}
+                      {device.name} ({device.ip}) • {isEn ? 'Port' : 'پورت'} {selectedPort.port_id}
                     </p>
                   </div>
                 </div>
@@ -2117,7 +2143,7 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
 
               {/* Body Content */}
               <div className="p-5 space-y-4 flex-1 overflow-y-auto">
-                {/* Target Information & Primary Changed Values Card */}
+                {/* Clean Exact Configuration Preview as requested */}
                 <div className="p-4 rounded-xl bg-slate-950/70 border border-white/10 space-y-3 font-mono text-xs">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-300">
                     <div>
@@ -2181,7 +2207,7 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
                   {/* Clean Configuration Preview Script */}
                   <div className="pt-2 border-t border-white/10">
                     <div className="text-[11px] font-sans text-slate-400 font-medium mb-1 flex items-center justify-between">
-                      <span>{isEn ? 'Interface Configuration to be applied:' : 'پیکربندی که روی پورت سوئیچ اعمال می‌شود:'}</span>
+                      <span>{isEn ? 'Configuration to be applied:' : 'پیکربندی که روی سوئیچ اعمال می‌شود (Configuration):'}</span>
                       <span className="text-[10px] text-emerald-400 font-mono">SSH / Cisco CLI</span>
                     </div>
                     <pre className="p-3 rounded-lg bg-slate-900 border border-white/10 text-emerald-300 font-mono text-xs leading-relaxed select-all" dir="ltr">
@@ -2225,35 +2251,35 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
                 {/* Cisco CLI Script Preview (Full terminal execution) */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between text-[11px] text-slate-300 font-medium">
-                    <span>{isEn ? 'Full Cisco IOS Session Script (Commands to be executed):' : 'متن کامل دستورات ارسالی در نشست سیسکو IOS:'}</span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded vendor-badge-cisco font-bold">SSH IOS-XE CLI</span>
+                    <span>{isEn ? 'Full Cisco IOS Session Script:' : 'متن کامل دستورات اجرایی در نشست سیسکو IOS:'}</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded vendor-badge-cisco font-bold">Cisco IOS-XE Script</span>
                   </div>
                   <pre className="p-3 rounded-xl bg-slate-950/90 border border-white/10 text-emerald-400 font-mono text-xs overflow-x-auto text-left leading-relaxed select-all" dir="ltr">
                     {generateCiscoCommands()}
                   </pre>
                 </div>
 
-                {/* Notice Alert */}
-                <div className="p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/40 text-indigo-200 text-xs flex items-start gap-2.5">
-                  <AlertTriangle className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                {/* Warning Alert about Running vs Startup */}
+                <div className="p-3.5 rounded-xl bg-amber-950/40 border border-amber-500/40 text-amber-200 text-xs flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                   <div className="leading-relaxed">
-                    <b>{isEn ? 'Review Notice:' : 'نکته تاییدیه:'}</b> {isEn ? (
-                      <>Upon confirming, these commands will be executed sequentially on physical switch <b>{device.name}</b> via SSH. The device will be updated and flagged with "Unsaved Changes" until you write memory.</>
+                    <b>{isEn ? 'Important Cisco Notice:' : 'توجه مهم سیسکو:'}</b> {isEn ? (
+                      <>These changes will immediately apply to active Running-Config. The device will be flagged in the topology with <b>"Unsaved Changes"</b> until you execute <code className="bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono font-bold border border-amber-500/30">write memory</code> to persist into NVRAM.</>
                     ) : (
-                      <>پس از تایید نهایی، دستورات فوق به ترتیب از طریق نشست SSH روی سوئیچ فیزیکی <b>{device.name}</b> اجرا شده و وضعیت پورت بلافاصله با سوئیچ همگام می‌شود.</>
+                      <>این تغییرات بلافاصله در حافظه جاری (Running-Config) سوئیچ اعمال می‌شود. پس از ذخیره، این تجهیز در پنل با وضعیت <b>«تغییرات رایت‌نشده»</b> مشخص خواهد شد تا مهندس شبکه دستور <code className="bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono font-bold border border-amber-500/30">write memory</code> را برای ذخیره دائم در NVRAM اجرا نماید.</>
                     )}
                   </div>
                 </div>
               </div>
 
-              {/* Footer Actions with Cancel and Confirm Apply */}
+              {/* Footer Actions with Cancel and Apply Configuration */}
               <div className="px-5 py-3.5 bg-black/20 border-t border-white/10 flex items-center justify-end gap-2.5 shrink-0">
                 <button
                   onClick={() => setShowConfirmSummary(false)}
                   disabled={isSaving}
                   className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 text-xs font-medium transition cursor-pointer disabled:opacity-50"
                 >
-                  {isEn ? 'Cancel & Return' : 'انصراف و بازگشت'}
+                  {isEn ? 'Cancel' : 'انصراف'}
                 </button>
                 <button
                   onClick={handleConfirmSave}
@@ -2263,8 +2289,8 @@ export const PortInspectorModal: React.FC<PortInspectorModalProps> = ({
                   <Check className="w-4 h-4" />
                   <span>
                     {isSaving
-                      ? (isEn ? 'Applying to Switch...' : 'در حال اعمال روی سوئیچ...')
-                      : (isEn ? 'Confirm & Apply to Port' : 'تایید نهایی و اعمال روی پورت')}
+                      ? (isEn ? 'Applying configuration...' : 'در حال اعمال پیکربندی...')
+                      : (isEn ? 'Apply Configuration' : 'اعمال پیکربندی')}
                   </span>
                 </button>
               </div>

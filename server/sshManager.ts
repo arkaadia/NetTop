@@ -1364,4 +1364,212 @@ export async function applyPortConfigViaSsh(
   });
 }
 
+export interface RawSshExecParams {
+  host: string;
+  port?: number;
+  username: string;
+  password?: string;
+  enablePassword?: string;
+  commands: string[];
+  vendor?: 'cisco' | 'mikrotik';
+  timeoutMs?: number;
+}
+
+export interface RawSshExecResult {
+  success: boolean;
+  output: string;
+  error?: string;
+  commandsExecuted: string[];
+}
+
+/**
+ * Robust Raw SSH command sequence executor for Network Automation engine
+ * Connects to live network gear (Cisco IOS/IOS-XE, MikroTik RouterOS) using real SSH2,
+ * manages terminal configuration, interactive prompts, and returns raw command output.
+ */
+export function executeRawSshCommands(params: RawSshExecParams): Promise<RawSshExecResult> {
+  const host = params.host;
+  const port = params.port || 22;
+  const username = params.username;
+  const password = params.password || '';
+  const enablePassword = params.enablePassword || '';
+  const vendor = params.vendor || 'cisco';
+  const timeout = params.timeoutMs || 30000;
+  const commands = (params.commands || []).filter((c) => c && c.trim().length > 0 && !c.trim().startsWith('!'));
+
+  return new Promise((resolve) => {
+    const conn = new Client();
+    let isSettled = false;
+    let accumulatedOutput = '';
+
+    const timer = setTimeout(() => {
+      if (!isSettled) {
+        isSettled = true;
+        try { conn.end(); } catch {}
+        resolve({
+          success: false,
+          output: accumulatedOutput,
+          error: `Execution timed out on ${username}@${host}:${port} after ${timeout / 1000}s`,
+          commandsExecuted: commands
+        });
+      }
+    }, timeout);
+
+    conn.on('keyboard-interactive', (_name, _instructions, _instructionsLang, prompts, finish) => {
+      finish(prompts.map(() => password));
+    });
+
+    conn.on('ready', () => {
+      conn.shell({
+        term: 'vt100',
+        cols: 300,
+        rows: 250
+      }, (shellErr, stream) => {
+        if (shellErr) {
+          if (!isSettled) {
+            isSettled = true;
+            clearTimeout(timer);
+            try { conn.end(); } catch {}
+            resolve({
+              success: false,
+              output: accumulatedOutput,
+              error: `Failed to allocate PTY shell on device: ${shellErr.message}`,
+              commandsExecuted: commands
+            });
+          }
+          return;
+        }
+
+        stream.on('data', (chunk: Buffer) => {
+          accumulatedOutput += chunk.toString('utf-8');
+        });
+
+        stream.on('close', () => {
+          if (!isSettled) {
+            isSettled = true;
+            clearTimeout(timer);
+            try { conn.end(); } catch {}
+
+            // Analyze output for vendor-specific errors
+            let hasError = false;
+            let errorMsg = '';
+
+            if (vendor === 'cisco') {
+              const syntaxError = accumulatedOutput.match(/% (Invalid input detected at '\^' marker|Command rejected:[^\r\n]+|Incomplete command|Ambiguous command|Configuration failed[^\r\n]*)/i);
+              if (syntaxError) {
+                hasError = true;
+                errorMsg = `Cisco IOS CLI error: ${syntaxError[0]}`;
+              }
+            } else if (vendor === 'mikrotik') {
+              const mikrotikError = accumulatedOutput.match(/(failure:[^\r\n]+|bad command name[^\r\n]*|syntax error[^\r\n]*|already exists[^\r\n]*)/i);
+              if (mikrotikError) {
+                hasError = true;
+                errorMsg = `RouterOS CLI error: ${mikrotikError[0]}`;
+              }
+            }
+
+            resolve({
+              success: !hasError,
+              output: accumulatedOutput,
+              error: hasError ? errorMsg : undefined,
+              commandsExecuted: commands
+            });
+          }
+        });
+
+        // Setup terminal environment and feed commands
+        setTimeout(() => {
+          if (vendor === 'cisco') {
+            stream.write('terminal length 0\n');
+            stream.write('terminal width 512\n');
+            if (enablePassword) {
+              stream.write('enable\n');
+              setTimeout(() => {
+                stream.write(enablePassword + '\n');
+              }, 300);
+            }
+          }
+
+          const startDelay = vendor === 'cisco' && enablePassword ? 800 : 300;
+          setTimeout(() => {
+            let delay = 0;
+            for (const cmd of commands) {
+              setTimeout(() => {
+                try {
+                  stream.write(`${cmd}\n`);
+                } catch {}
+              }, delay);
+              delay += 80;
+            }
+
+            // Graceful exit after sending all commands
+            setTimeout(() => {
+              try {
+                if (vendor === 'cisco') {
+                  stream.write('exit\n');
+                } else {
+                  stream.write('\n');
+                  stream.write('/quit\n');
+                }
+              } catch {}
+              // Give 1.5s for remote device to buffer and flush
+              setTimeout(() => {
+                try { conn.end(); } catch {}
+              }, 1500);
+            }, delay + 500);
+          }, startDelay);
+        }, 300);
+      });
+    });
+
+    conn.on('error', (err: any) => {
+      if (!isSettled) {
+        isSettled = true;
+        clearTimeout(timer);
+        try { conn.end(); } catch {}
+        let msg = err.message || 'SSH connection failure';
+        if (err.level === 'client-authentication') {
+          msg = `SSH authentication failed for ${username}@${host}`;
+        } else if (err.code === 'ECONNREFUSED') {
+          msg = `Connection refused by ${host}:${port}`;
+        } else if (err.code === 'ETIMEDOUT') {
+          msg = `Connection timed out reaching ${host}:${port}`;
+        }
+        resolve({
+          success: false,
+          output: accumulatedOutput,
+          error: msg,
+          commandsExecuted: commands
+        });
+      }
+    });
+
+    try {
+      conn.connect({
+        host,
+        port,
+        username,
+        password,
+        readyTimeout: 12000,
+        tryKeyboard: true,
+        algorithms: COMPATIBLE_ALGORITHMS,
+        keepaliveInterval: 5000,
+        keepaliveCountMax: 3
+      });
+    } catch (connectErr: any) {
+      if (!isSettled) {
+        isSettled = true;
+        clearTimeout(timer);
+        resolve({
+          success: false,
+          output: accumulatedOutput,
+          error: `Failed to initiate SSH connection: ${connectErr.message}`,
+          commandsExecuted: commands
+        });
+      }
+    }
+  });
+}
+
+
 

@@ -42,8 +42,8 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
 - **ویرایش مستقیم از جدول پورت‌ها (All Switch Ports):** با کلیک روی دکمه Edit در هر سطر جدول، فرم ویرایش فعال شده و صفحه با اسکرول نرم خودکار به سمت کارت پیکربندی هدایت می‌شود.
 - **اتصال مستقیم تغییرات پورت به سوئیچ واقعی از طریق SSH (Real Switch Direct Configuration via SSH):**
   - تمامی تغییرات اعمال‌شده در فرانت‌اند (تغییر VLAN ID، مد Access/Trunk، ویلن‌های مجاز Allowed VLANs، وضعیت Port Security، Admin Status و Description) مستقیماً از مسیر `Frontend -> API -> Backend -> SSH Service -> Real Cisco Switch` عبور کرده و روی اینترفیس فیزیکی سوئیچ اعمال می‌شوند.
-  - **ریویو و پیش‌نمایش دستورات پیش از اعمال نهایی (Review & Confirmation Modal):** با کلیک روی دکمه «ذخیره و اعمال روی پورت» (Apply & Save to Port)، یک پنجره مودال شیشه‌ای با بلور پس‌زمینه نمایش داده می‌شود که مشخصات سوئیچ و اینترفیس، جدول مقایسه مقادیر قبلی و جدید (VLAN, Port Security, Mode, Admin Status)، پیکربندی تمیز اینترفیس و نشست کامل دستورات ارسالی SSH سیسکو را برای بازبینی دقیق مهندس شبکه فراهم می‌کند و تنها پس از تایید نهایی کاربر، دستورات به سوئیچ فیزیکی ارسال می‌شوند.
-  - **پایداری وضعیت و عدم به‌روزرسانی زودهنگام:** کلید اعمال پیکربندی حین اجرا با وضعیت «Applying to Switch...» غیرفعال شده و تنها پس از دریافت تایید موفقیت قطعی از سوئیچ واقعی، رابط کاربری به‌روزرسانی و اطلاعات مجدداً از سوئیچ بارگذاری می‌گردند؛ در صورت بروز خطا، مقادیر فرم به حالت قبل بازمی‌گردند.
+  - **پیش‌نمایش پیکربندی (Configuration Preview Modal):** پیش از اعمال هر کانفیگ، پنجره تاییدیه شامل مشخصات دیوایس، نام اینترفیس، مقایسه ویلن فعلی و جدید و دستورات دقیق CLI سیسکو (`interface Gi...`, `switchport access vlan ...`) به کاربر نمایش داده می‌شود.
+  - **پایداری وضعیت و عدم به‌روزرسانی زودهنگام:** کلید اعمال پیکربندی حین اجرا با وضعیت «Applying configuration...» غیرفعال شده و تنها پس از دریافت تایید موفقیت قطعی از سوئیچ واقعی، رابط کاربری به‌روزرسانی و اطلاعات مجدداً از سوئیچ بارگذاری می‌گردند؛ در صورت بروز خطا، مقادیر فرم به حالت قبل بازمی‌گردند.
 
 ### ۲. امنیت پورت لایه ۲ سیسکو (Cisco Port Security)
 - **فعال‌سازی با کلید تعاملی با کنتراست بالا:** اعمال پیکربندی `switchport port-security` روی پورت‌های اکسس.
@@ -143,6 +143,26 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
   - کارت اسکنر همسایگی CDP/LLDP (`card-cdp-scanner`)
   - کارت داشبورد پایش شبکه (`module-dashboard`)
 
+### ۱۳. ماژول اتوماسیون جامع شبکه و ارکستراسیون چندسازنده (Network Automation & Multi-Vendor Orchestration)
+- **پایپ‌لاین ۸ مرحله‌ای قطعی و ایمن (8-Stage Deterministic Safety Pipeline):**
+  - پیاده‌سازی متدولوژی امن سازمانی: کشف وضعیت زنده (Discover) ← اعتبارسنجی نحوی و ارزیابی ریسک (Validate) ← تولید دستورات استاندارد CLI (Generate) ← پیش‌نمایش شفاف دستورات و Diff (Preview) ← اسنپ‌شات خودکار و غیرقابل تغییر از کانفیگ زنده (Backup) ← ارسال از طریق SSH واقعی (Apply) ← اجرای دستورات show و راستی‌آزمایی برخط (Verify) ← بازگردانی هوشمند به نسخه پیشین در صورت بروز خطا (Rollback).
+- **اتصال واقعی به سخت‌افزار از طریق SSH (بدون Mock یا Fake Data):**
+  - تمامی دستورات مستقیماً از طریق پروتکل امن SSHv2 روی اینترفیس‌ها، روت‌ها و روتینگ پروتکل‌های سخت‌افزار واقعی اعمال و راستی‌آزمایی می‌شوند.
+- **پشتیبانی کامل از تجهیزات سیسکو (Cisco IOS / IOS-XE Suite):**
+  - **روتینگ پیشرفته:** Static Routing با وزن و اینترفیس خروجی، پروتکل OSPFv2 چند ناحیه‌ای همراه با Router-ID و اینترفیس‌های Passive، پروتکل BGP Peering تک و چند همسایه با Remote-AS و Update-Source، و ویزارد خودکار اتصال نقطه به نقطه (P2P Interconnect) جهت پیکربندی متقارن دو سر لینک روی دو روتر همزمان.
+  - **سوئیچینگ لایه ۲:** پورت‌های Access، ترانک‌های 802.1Q با هماهنگی Native VLAN و ویلن‌های مجاز، فعال‌سازی PortFast و BPDU Guard برای پیشگیری قطعی از حلقه‌های سوئیچینگ.
+  - **بانک اطلاعاتی VLAN و SVI:** ایجاد تکی یا دسته‌جمعی ویلن‌ها با گرامر فشرده (نظیر `10,20,30-50`) و تعریف خودکار Interface VLAN همراه با IP و ساب‌نت ماسک.
+  - **سرویس‌های پیشرفته سازمانی:** تجمیع پورت EtherChannel (LACP Active/Passive/On)، پروتکل Spanning Tree (PVST+, Rapid-PVST, MSTP, Root Primary/Secondary)، تونل‌های امن GRE، پایش پایداری و تاخیر با IP SLA و ردگیری ICMP، مترجم آدرس شبکه NAT (Overload/PAT/Pool)، و سرور DHCP اختصاصی با رنج‌های مستثنی‌شده (Excluded Addresses).
+  - **انطباق و هاردنینگ امنیتی (CIS Hardening & Live Audit):** اسکن زنده پیکربندی سوئیچ و روتر، محاسبه شاخص سلامت امنیتی (۰ تا ۱۰۰)، ارزیابی پسورد سکرت Type 5/8/9، احراز هویت AAA، رمزنگاری سرویس‌ها، غیرفعال‌سازی سرویس‌های منسوخ Telnet/HTTP، کنترل دسترسی SSH با ACL، فعال‌سازی تاخیر ورود لاگین و بنر هشدار سازمانی، همراه با دکمه مستقیم Remediation برای رفع فوری هر آسیب‌پذیری با دستورات رسمی سیسکو.
+- **پشتیبانی کامل از تجهیزات میکروتیک (MikroTik RouterOS Suite):**
+  - راه‌اندازی تونل‌های امن WireGuard VPN شامل Interface، پورت Listen، کلیدهای عمومی و همتایان (Peers) مجاز.
+  - فایروال وضعیت‌مند و هاردنینگ: FastTrack Connections، فیلتر بسته‌های Invalid، و سیستم ضد بروت‌فورس SSH با لیست سیاه پویا.
+  - روتینگ و فیل‌اور خودکار اینترنت: مسیریابی بازگشتی (Recursive Routing) جهت بررسی سلامت آپ‌استریم و سوئیچینگ آنی بین دو لینک اینترنت WAN1 و WAN2.
+  - قوانین NAT (Masquerade و Port Forwarding dst-nat) و فیلترینگ سخت‌افزاری Bridge VLAN.
+- **مخزن اسنپ‌شات‌ها و لاگ حاکمیت سازمانی (Snapshot Vault & Audit Trail):**
+  - ذخیره‌سازی خودکار نسخه کامل `running-config` پیش از اعمال هر دستور، امکان مشاهده Diff و محتوای اسنپ‌شات، و بازگردانی بلادرنگ (Rollback) با یک کلیک.
+  - ثبت تغییرات در دفتر کل مانیتورینگ شامل مشخصات کاربر، زمان دقیق، نام دیوایس، کلیه خطوط ارسالی، وضعیت راستی‌آزمایی و لاگ جامع خطاها.
+
 ---
 
 ## ساختار معماری و تکنولوژی‌ها
@@ -221,8 +241,8 @@ npm start
 - **All Switch Ports Table Integration:** Clicking **Edit** on any port row instantly opens the configuration form and automatically executes a smooth scroll to the active edit card.
 - **Real-Switch Direct Configuration via SSH:**
   - All port configuration edits (VLAN ID, Access/Trunk mode, Allowed VLANs, Port Security parameters, Admin Status, and Description) route through `Frontend -> API -> Backend -> SSH Service -> Real Cisco Switch`, applying directly to the hardware switch interface.
-  - **Review Changes & Command Preview Prior to Execution (Review & Confirmation Modal):** Clicking **Apply & Save to Port** triggers a spatial glassmorphic confirmation modal featuring target device and interface details, a side-by-side diff table of previous vs. new values (VLAN ID, Port Security parameters, Mode, Admin Status), clean interface configuration, and full Cisco IOS-XE SSH CLI command stream. Only upon explicit user confirmation are live commands sent to the physical switch.
-  - **Reliable State Enforcement & Deferred UI Updates:** The apply action shows "Applying to Switch..." with disabled buttons until the switch explicitly returns success. Upon execution failure, the UI rolls back to previous state without desynchronizing from the physical switch.
+  - **Mandatory Configuration Preview Modal:** Prior to applying any changes, a confirmation dialog appears showing target device, interface identifier, current vs new proposed values, and generated Cisco IOS CLI commands (`interface Gi...`, `switchport access vlan ...`).
+  - **Reliable State Enforcement & Deferred UI Updates:** The apply action shows "Applying configuration..." with disabled buttons until the switch explicitly returns success. Upon execution failure, the UI rolls back to previous state without desynchronizing from the physical switch.
 
 ### 2. Cisco Layer-2 Port Security Management
 - **One-Touch Port Security Toggle:** Effortlessly apply `switchport port-security` with dedicated high-contrast controls.
@@ -322,6 +342,26 @@ npm start
   - Configuration Template Library (`card-template-library`)
   - CDP/LLDP Topology Scanner (`card-cdp-scanner`)
   - Central Network Health Dashboard (`module-dashboard`)
+
+### 13. Production Network Automation & Multi-Vendor Orchestration
+- **8-Stage Deterministic Safety Pipeline:**
+  - Discover → Validate (Syntax, CIDR, Duplicates, Risk Evaluation) → Generate → Preview (Diff & Explanation) → Automatic Pre-Apply Snapshot → Apply (Real SSH Transport) → Verify (Post-Apply Show Verifications) → Rollback (Automated or On-Demand Reversion).
+- **Zero Mock / 100% Real Hardware SSH Execution:**
+  - All configurations are dispatched directly through authenticated SSHv2 sessions to genuine target appliances without simulation layers or mock fallbacks.
+- **Cisco IOS / IOS-XE Enterprise Suite:**
+  - **Routing & Dynamic Protocols:** Static IPv4 routes with next-hop metrics, multi-area OSPFv2 with Router-ID and passive interfaces, BGP peering with neighbor policies, and a symmetric Point-to-Point (P2P) Interconnect Wizard configuring both routers simultaneously.
+  - **Layer-2/Layer-3 Switching:** Access port assignments, 802.1Q trunking with custom Native VLANs and Allowed VLAN lists, PortFast edge activation, and BPDU Guard loop defense.
+  - **VLAN & SVI Engine:** Single and batch VLAN provisioning with concise range syntax (`10,20,30-50`) and automated Switched Virtual Interface (SVI) creation with IP addresses and subnet masks.
+  - **Advanced Enterprise Services:** LACP / EtherChannel port bundling (Active, Passive, On modes), Spanning Tree tuning (PVST+, Rapid-PVST, MSTP, Root Primary/Secondary, Port Costs), secure GRE tunnels, IP SLA ICMP-Echo latency probes, NAT/PAT translation (Overload, Pools), and local DHCP IP Pools with exclusion ranges.
+  - **CIS Hardening & Live Audit:** Live device configuration scanning, 0-100 posture score calculation, evaluation of secret hashing (Type 5/8/9), AAA new-model, service password encryption, Telnet/HTTP legacy service disabling, SSH ACL access-class restrictions, login delay enforcement, and single-click automated remediation.
+- **MikroTik RouterOS Suite:**
+  - High-performance WireGuard VPN tunnels with interface configuration, listen ports, public keys, and peer route filtering.
+  - Stateful Firewall & Hardening: FastTrack acceleration, invalid packet dropping, and 3-stage dynamic SSH brute-force blacklist address lists.
+  - Dual WAN Recursive Route Failover: Upstream ping reachability checks for instant failover between primary and secondary ISPs.
+  - Masquerade NAT, destination port forwarding (dst-nat), and hardware bridge VLAN filtering.
+- **Automated Snapshot Vault & Governance Audit Trail:**
+  - Automatic running-config snapshots before every push, built-in diff viewer, and instant one-click hardware rollback.
+  - Tamper-evident execution ledger recording timestamps, active users, executed CLI commands, verification summaries, and full rollback telemetry.
 
 ---
 
