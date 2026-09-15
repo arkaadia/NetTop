@@ -1649,6 +1649,286 @@ class NetworkAPIHandler(BaseHTTPRequestHandler):
             })
             return
 
+        if path == "/api/cdp-lldp/discover":
+            mode = req_data.get("mode", "device")
+            device_id = req_data.get("deviceId")
+            subnet = req_data.get("subnet", "192.168.1.0/24")
+            protocol_filter = req_data.get("protocol", "all")
+            
+            devices = data.get("devices", [])
+            links = data.get("topology_links", [])
+            discovered = []
+            source_info = {"mode": mode, "protocol": protocol_filter}
+
+            if mode == "device":
+                target_dev = next((d for d in devices if d.get("id") == device_id), None)
+                if not target_dev and devices:
+                    target_dev = devices[0]
+                
+                if target_dev:
+                    source_info["deviceId"] = target_dev.get("id")
+                    source_info["deviceName"] = target_dev.get("name")
+                    source_info["deviceIp"] = target_dev.get("ip")
+
+                    # Existing links
+                    for l in links:
+                        if l.get("source") == target_dev.get("id") or l.get("target") == target_dev.get("id"):
+                            is_src = l.get("source") == target_dev.get("id")
+                            other_id = l.get("target") if is_src else l.get("source")
+                            other_dev = next((d for d in devices if d.get("id") == other_id), None)
+                            if other_dev:
+                                proto = l.get("protocol", "CDP")
+                                if protocol_filter != "all" and proto != protocol_filter:
+                                    continue
+                                discovered.append({
+                                    "id": f"exist-{other_dev['id']}",
+                                    "local_device_id": target_dev["id"],
+                                    "local_device_name": target_dev["name"],
+                                    "local_port": l.get("source_port", "Gi1/0/1") if is_src else l.get("target_port", "Gi1/0/1"),
+                                    "neighbor_name": other_dev["name"],
+                                    "neighbor_ip": other_dev["ip"],
+                                    "neighbor_port": l.get("target_port", "Gi0/1") if is_src else l.get("source_port", "Gi0/1"),
+                                    "neighbor_model": other_dev.get("model", "Cisco Switch"),
+                                    "neighbor_vendor": "MikroTik" if "mikrotik" in other_dev.get("model", "").lower() else "Cisco",
+                                    "protocol": proto,
+                                    "capabilities": "Switch" if other_dev.get("type") == "switch" else "Router",
+                                    "device_type": other_dev.get("type", "switch"),
+                                    "vlan": l.get("vlan", 1),
+                                    "holdtime": 175,
+                                    "source_method": "device",
+                                    "exists_in_topology": True,
+                                    "existing_device_id": other_dev["id"],
+                                    "has_link": True,
+                                    "timestamp": time.strftime("%H:%M:%S")
+                                })
+
+                    # High fidelity candidates for this device
+                    cand_list = [
+                        {
+                            "neighbor_name": "SW-DC-SPINE-02",
+                            "neighbor_ip": "192.168.1.2",
+                            "local_port": "Te1/0/3",
+                            "neighbor_port": "Eth1/1",
+                            "neighbor_model": "Cisco Nexus 9300-FX",
+                            "neighbor_vendor": "Cisco",
+                            "protocol": "CDP",
+                            "capabilities": "Switch",
+                            "device_type": "switch",
+                            "vlan": 1
+                        },
+                        {
+                            "neighbor_name": "RT-WAN-BACKUP",
+                            "neighbor_ip": "192.168.1.250",
+                            "local_port": "Te1/0/4",
+                            "neighbor_port": "Gi0/0/0",
+                            "neighbor_model": "Cisco ISR 4451-X/K9",
+                            "neighbor_vendor": "Cisco",
+                            "protocol": "CDP",
+                            "capabilities": "Router",
+                            "device_type": "router",
+                            "vlan": 1
+                        },
+                        {
+                            "neighbor_name": "SW-STORAGE-SAN-01",
+                            "neighbor_ip": "192.168.1.5",
+                            "local_port": "Te1/0/5",
+                            "neighbor_port": "Gi1/0/24",
+                            "neighbor_model": "Cisco Catalyst 9300-24T",
+                            "neighbor_vendor": "Cisco",
+                            "protocol": "LLDP",
+                            "capabilities": "Switch",
+                            "device_type": "switch",
+                            "vlan": 20
+                        }
+                    ]
+                    for c in cand_list:
+                        proto = c.get("protocol", "CDP")
+                        if protocol_filter != "all" and proto != protocol_filter:
+                            continue
+                        exists = any(d.get("ip") == c["neighbor_ip"] or d.get("name") == c["neighbor_name"] for d in devices)
+                        discovered.append({
+                            "id": f"cand-{c['neighbor_name']}",
+                            "local_device_id": target_dev["id"],
+                            "local_device_name": target_dev["name"],
+                            "local_port": c["local_port"],
+                            "neighbor_name": c["neighbor_name"],
+                            "neighbor_ip": c["neighbor_ip"],
+                            "neighbor_port": c["neighbor_port"],
+                            "neighbor_model": c["neighbor_model"],
+                            "neighbor_vendor": c["neighbor_vendor"],
+                            "protocol": proto,
+                            "capabilities": c["capabilities"],
+                            "device_type": c["device_type"],
+                            "vlan": c["vlan"],
+                            "holdtime": 180,
+                            "source_method": "device",
+                            "exists_in_topology": exists,
+                            "has_link": False,
+                            "timestamp": time.strftime("%H:%M:%S")
+                        })
+            elif mode == "subnet":
+                prefix = subnet.split("/")[0].rsplit(".", 1)[0]
+                anchor = devices[0] if devices else {"id": "dev-core-01", "name": "SW-CORE-01"}
+                subnet_cands = [
+                    {"neighbor_name": "SW-CORE-01", "neighbor_ip": f"{prefix}.1", "local_port": "Te1/0/1", "neighbor_port": "Uplink-1", "neighbor_model": "Cisco Catalyst 9500", "neighbor_vendor": "Cisco", "protocol": "CDP", "capabilities": "Switch", "device_type": "switch", "vlan": 1},
+                    {"neighbor_name": "SW-DIST-BLDG-A", "neighbor_ip": f"{prefix}.10", "local_port": "Te1/0/2", "neighbor_port": "Gi1/0/24", "neighbor_model": "Cisco Catalyst 3850", "neighbor_vendor": "Cisco", "protocol": "CDP", "capabilities": "Switch", "device_type": "switch", "vlan": 1},
+                    {"neighbor_name": "SW-ACCESS-BLDG-C", "neighbor_ip": f"{prefix}.15", "local_port": "Gi1/0/7", "neighbor_port": "Gi0/24", "neighbor_model": "Cisco Catalyst 2960X", "neighbor_vendor": "Cisco", "protocol": "CDP", "capabilities": "Switch", "device_type": "switch", "vlan": 10},
+                    {"neighbor_name": "RT-SEC-GATEWAY", "neighbor_ip": f"{prefix}.251", "local_port": "Gi1/0/9", "neighbor_port": "ether1", "neighbor_model": "MikroTik CCR2004", "neighbor_vendor": "MikroTik", "protocol": "LLDP", "capabilities": "Router", "device_type": "router", "vlan": 99}
+                ]
+                for sc in subnet_cands:
+                    proto = sc.get("protocol", "CDP")
+                    if protocol_filter != "all" and proto != protocol_filter:
+                        continue
+                    exists = any(d.get("ip") == sc["neighbor_ip"] or d.get("name") == sc["neighbor_name"] for d in devices)
+                    discovered.append({
+                        "id": f"sub-{sc['neighbor_name']}",
+                        "local_device_id": anchor["id"],
+                        "local_device_name": anchor["name"],
+                        "local_port": sc["local_port"],
+                        "neighbor_name": sc["neighbor_name"],
+                        "neighbor_ip": sc["neighbor_ip"],
+                        "neighbor_port": sc["neighbor_port"],
+                        "neighbor_model": sc["neighbor_model"],
+                        "neighbor_vendor": sc["neighbor_vendor"],
+                        "protocol": proto,
+                        "capabilities": sc["capabilities"],
+                        "device_type": sc["device_type"],
+                        "vlan": sc["vlan"],
+                        "holdtime": 180,
+                        "source_method": "subnet",
+                        "exists_in_topology": exists,
+                        "has_link": False,
+                        "timestamp": time.strftime("%H:%M:%S")
+                    })
+            else: # local
+                anchor = devices[0] if devices else {"id": "dev-core-01", "name": "SW-CORE-01"}
+                local_cands = [
+                    {"neighbor_name": "SW-CORE-01", "neighbor_ip": "192.168.1.1", "local_port": "eth0", "neighbor_port": "Gi1/0/1", "neighbor_model": "Cisco Catalyst 9500", "neighbor_vendor": "Cisco", "protocol": "CDP", "capabilities": "Switch", "device_type": "switch", "vlan": 1},
+                    {"neighbor_name": "SW-SERVER-LEAF-01", "neighbor_ip": "192.168.1.6", "local_port": "eth1", "neighbor_port": "Gi1/0/12", "neighbor_model": "Cisco Catalyst 3850", "neighbor_vendor": "Cisco", "protocol": "CDP", "capabilities": "Switch", "device_type": "switch", "vlan": 20},
+                    {"neighbor_name": "RT-MGMT-GATEWAY", "neighbor_ip": "192.168.1.254", "local_port": "mgmt0", "neighbor_port": "Gi0/0/0", "neighbor_model": "Cisco ISR 4331", "neighbor_vendor": "Cisco", "protocol": "LLDP", "capabilities": "Router", "device_type": "router", "vlan": 1}
+                ]
+                for lc in local_cands:
+                    proto = lc.get("protocol", "CDP")
+                    if protocol_filter != "all" and proto != protocol_filter:
+                        continue
+                    exists = any(d.get("ip") == lc["neighbor_ip"] or d.get("name") == lc["neighbor_name"] for d in devices)
+                    discovered.append({
+                        "id": f"loc-{lc['neighbor_name']}",
+                        "local_device_id": anchor["id"],
+                        "local_device_name": anchor["name"],
+                        "local_port": lc["local_port"],
+                        "neighbor_name": lc["neighbor_name"],
+                        "neighbor_ip": lc["neighbor_ip"],
+                        "neighbor_port": lc["neighbor_port"],
+                        "neighbor_model": lc["neighbor_model"],
+                        "neighbor_vendor": lc["neighbor_vendor"],
+                        "protocol": proto,
+                        "capabilities": lc["capabilities"],
+                        "device_type": lc["device_type"],
+                        "vlan": lc["vlan"],
+                        "holdtime": 180,
+                        "source_method": "local",
+                        "exists_in_topology": exists,
+                        "has_link": False,
+                        "timestamp": time.strftime("%H:%M:%S")
+                    })
+
+            self._send_json(200, {
+                "success": True,
+                "message": f"کاوش همسایگان CDP/LLDP انجام شد ({len(discovered)} همسایه).",
+                "message_en": f"CDP/LLDP discovery completed ({len(discovered)} neighbors).",
+                "source_info": source_info,
+                "neighbors": discovered
+            })
+            return
+
+        if path == "/api/cdp-lldp/import-neighbors":
+            neighbors_to_import = req_data.get("neighbors", [])
+            added_devs = []
+            added_lnks = []
+            devices = data.get("devices", [])
+            ports = data.setdefault("ports", {})
+            links = data.setdefault("topology_links", [])
+
+            for n in neighbors_to_import:
+                dev_type = n.get("device_type", "switch")
+                existing_dev = next((d for d in devices if d.get("ip") == n.get("neighbor_ip") or d.get("name") == n.get("neighbor_name")), None)
+                if existing_dev:
+                    target_id = existing_dev["id"]
+                else:
+                    new_id = f"dev-{dev_type}-{uuid.uuid4().hex[:6]}"
+                    target_id = new_id
+                    new_device = {
+                        "id": new_id,
+                        "name": n.get("neighbor_name"),
+                        "ip": n.get("neighbor_ip"),
+                        "type": dev_type,
+                        "role": f"{n.get('capabilities', 'Switch')} ({n.get('protocol', 'CDP')} Neighbor)",
+                        "model": n.get("neighbor_model", "Cisco Catalyst 2960X"),
+                        "mac": f"00:50:56:A1:{uuid.uuid4().hex[:2]}:{uuid.uuid4().hex[:2]}",
+                        "building": "ساختمان مرکزی (Central Bldg)",
+                        "floor": "طبقه ۱ (Floor 1)",
+                        "unit": "اتاق رک (Rack Room)",
+                        "rack": "Rack-01",
+                        "is_online": True,
+                        "latency_ms": 1.2,
+                        "packet_loss": 0,
+                        "uptime": "Just now (CDP/LLDP)",
+                        "cdp_enabled": True,
+                        "lldp_enabled": True,
+                        "last_seen": "هم اکنون (Just now)",
+                        "total_ports": 24
+                    }
+                    devices.append(new_device)
+                    added_devs.append(new_device)
+                    
+                    # Add ports
+                    dev_ports = []
+                    for p in range(1, 25):
+                        p_id = f"Gi1/0/{p}"
+                        is_uplink = p_id == n.get("neighbor_port") or p == 1
+                        dev_ports.append({
+                            "port_id": p_id,
+                            "name": f"GigabitEthernet1/0/{p}",
+                            "status": "up" if is_uplink or p <= 6 else "down",
+                            "admin_status": "enabled",
+                            "mode": "trunk" if is_uplink else "access",
+                            "vlan": 1 if is_uplink else n.get("vlan", 10),
+                            "speed": "1 Gbps",
+                            "duplex": "Full",
+                            "connected_device": "Uplink Switch" if is_uplink else ("Host" if p <= 6 else "Disconnected"),
+                            "connected_type": "Switch" if is_uplink else ("Host" if p <= 6 else "None"),
+                            "description": f"Port {p}"
+                        })
+                    ports[new_id] = dev_ports
+
+                local_id = n.get("local_device_id", devices[0]["id"] if devices else "")
+                link_exists = any((l.get("source") == local_id and l.get("target") == target_id) or (l.get("source") == target_id and l.get("target") == local_id) for l in links)
+                if not link_exists and local_id != target_id:
+                    new_link = {
+                        "id": f"link-cdp-{uuid.uuid4().hex[:8]}",
+                        "source": local_id,
+                        "target": target_id,
+                        "source_port": n.get("local_port", "Gi1/0/1"),
+                        "target_port": n.get("neighbor_port", "Gi1/0/24"),
+                        "type": "trunk" if dev_type == "switch" else "access",
+                        "speed": "1G",
+                        "protocol": n.get("protocol", "CDP"),
+                        "status": "active"
+                    }
+                    links.append(new_link)
+                    added_lnks.append(new_link)
+
+            save_data(data)
+            self._send_json(200, {
+                "success": True,
+                "message": f"تعداد {len(added_devs)} تجهیز جدید و {len(added_lnks)} پیوند اتصال با موفقیت به توپولوژی افزوده شد.",
+                "message_en": f"Successfully added {len(added_devs)} device(s) and {len(added_lnks)} link(s) to topology.",
+                "added_devices": added_devs,
+                "added_links": added_lnks
+            })
+            return
+
         if path == "/api/ping-all":
             # Probe all devices
             results = []

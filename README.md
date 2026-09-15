@@ -76,9 +76,17 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
 - **پارامترهای متغیر پویا:** درج متغیرهایی مانند `{{HOSTNAME}}` و `{{IP_ADDRESS}}` و جایگزینی هوشمند آن‌ها قبل از ارسال به دیوایس.
 - **تست و بررسی Diff قبل از اعمال:** مشاهده خط‌به‌خط تغییرات ارسالی به سوئیچ برای پیشگیری از اختلال در شبکه.
 
-### ۶. نقشه توپولوژی شبکه و مدیریت رک‌ها (Topology & Rack Layout)
-- **پایش مکانی:** دسته‌بندی تجهیزات بر اساس ساختمان، طبقه، واحد و رک فیزیکی.
-- **پایش وضعیت اتصال:** نمایش وضعیت آنلاین/آفلاین بودن هر سوئیچ و روتر با پینگ و تله‌متری دوره‌ای.
+### ۶. نقشه توپولوژی شبکه، مدیریت رک‌ها و کاوش خودکار همسایگان با CDP و LLDP (Topology & CDP/LLDP Discovery)
+- **پایش مکانی و ساختار فیزیکی:** دسته‌بندی تجهیزات بر اساس ساختمان، طبقه، واحد و رک فیزیکی با قابلیت درگ‌اند‌دراپ و جابجایی آزاد.
+- **پایش وضعیت اتصال و کابل‌کشی:** نمایش بصری کابل‌ها و لینک‌های فیزیکی بین پورت‌ها با رنگ‌بندی و تفکیک ترانک و اکسس.
+- **کشف و افزودن خودکار همسایگان با پروتکل‌های لایه ۲ (CDP & LLDP Discovery & Topology Import):**
+  - **۳ روش کاوش یکپارچه:**
+    1. **پرس‌وجوی مستقیم سوئیچ یا روتر:** استخراج جدول همسایگان با فرامین `show cdp neighbors detail` و `show lldp neighbors detail` روی سوئیچ منتخب.
+    2. **اسکن رنج شبکه (CIDR Subnet Sweep):** اسکن بلوک IP هدف (مانند `192.168.1.0/24`) و گردآوری تجمیعی همسایگان لایه ۲.
+    3. **کارت شبکه محلی سیستم:** تحلیل بسته‌های مالتی‌کست CDP و LLDP از سوئیچ بالادستی متصل به سرور.
+  - **دکمه میانبر اختصاصی در پنل سوئیچ:** با انتخاب هر سوئیچ در نقشه، دکمه «کاوش همسایگان این سوئیچ (CDP/LLDP)» مستقیماً مودال کاوش را با مبدا قرار دادن آن سوئیچ باز می‌کند.
+  - **افزودن بلادرنگ به توپولوژی با یک کلیک:** امکان انتخاب تکی یا دسته‌جمعی همسایگان و ثبت خودکار تجهیزات، پورت‌ها و لینک‌های اتصالی در نقشه با چیدمان هوشمند و بدون تداخل فیزیکی.
+  - **تفکیک هوشمند تجهیزات موجود و جدید:** شناسایی خودکار تجهیزاتی که از قبل در توپولوژی ثبت شده‌اند و برچسب‌گذاری همسایگان جدید آماده ورود به نقشه.
 - **فیلترهای پیشرفته:** جستجوی آنی بر اساس آی‌پی، نام سوئیچ، مدل و پورت‌های فعال.
 
 ### ۷. تم‌ها و پالت‌های رنگی ماتریکس با تم اختصاصی سایبرپانک ۲۰۷۷ (Themes & Cyberpunk 2077 Palette)
@@ -290,8 +298,17 @@ npm start
 - **Dynamic Parameter Replacement:** Interpolates template placeholders (e.g. `{{HOSTNAME}}`, `{{IP_ADDRESS}}`) before pushing to target appliances.
 - **Diff & Validation View:** Visual comparison of running configurations vs. target states before deployment.
 
-### 6. Topology Mapping & Rack Hierarchy
-- **Physical Organization:** Hierarchical grouping by building, floor, room, and rack unit.
+### 6. Topology Mapping, Rack Hierarchy & CDP/LLDP Neighbor Discovery
+- **Physical Organization & Visual Layout:** Hierarchical grouping by building, floor, room, and rack unit with smooth pan/zoom canvas and free drag-and-drop.
+- **Port-to-Port Cable Links:** Visual cable rendering showing real interface connections, speed, media type, and VLAN encapsulations.
+- **Integrated Layer-2 CDP & LLDP Neighbor Discovery & Instant Topology Import:**
+  - **3 Unified Operational Modes:**
+    1. **Per-Switch/Router CLI Query:** Query Cisco CDP v2 and IEEE 802.1AB LLDP neighbor tables directly on any selected switch or router.
+    2. **Subnet CIDR Range Sweep:** Concurrently scan IP blocks (e.g. `192.168.1.0/24`, `10.0.0.0/24`) to aggregate Layer 2 topology adjacencies.
+    3. **Local Host Network Sniffer:** Capture upstream CDP/LLDP multicast frames arriving on the server's network adapter.
+  - **Quick Action on Switch Selection:** Selecting any switch or router on the canvas exposes a dedicated "Discover Neighbors (CDP/LLDP)" button that pre-selects that appliance as the discovery source.
+  - **One-Click Batch Import to Canvas:** Select discovered neighbor appliances and import them into the schematic topology instantly with auto-provisioned ports, physical links, and collision-free radial canvas positioning.
+  - **Intelligent Adjacency Badges:** Live detection of existing vs. new equipment, protocol tags (CDP vs. LLDP), device capabilities, and remote port mappings.
 - **Real-Time Health Monitoring:** Visual indicators for device reachability, uptime, and firmware versions.
 - **Fast Search & Filtering:** Filter devices by IP, model, location, or active port status.
 

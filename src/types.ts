@@ -147,6 +147,28 @@ export interface CdpLldpNeighbor {
   timestamp?: string;
 }
 
+export type DiscoveryMode = 'device' | 'subnet' | 'local';
+
+export interface DiscoveredNeighbor extends CdpLldpNeighbor {
+  id: string;
+  local_device_name?: string;
+  neighbor_vendor?: string;
+  device_type?: 'switch' | 'router' | 'firewall' | 'access_point' | 'server';
+  source_method?: DiscoveryMode;
+  exists_in_topology?: boolean;
+  existing_device_id?: string;
+  has_link?: boolean;
+}
+
+export interface CdpLldpDiscoveryParams {
+  mode: DiscoveryMode;
+  deviceId?: string;
+  subnet?: string;
+  protocol?: 'all' | 'CDP' | 'LLDP';
+  sshPort?: number;
+  timeoutMs?: number;
+}
+
 export interface TopologyLink {
   id: string;
   source: string;

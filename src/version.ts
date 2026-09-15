@@ -10,9 +10,32 @@ export interface ReleaseNote {
   changes_en?: string[];
 }
 
-export const APP_VERSION = '1.13.1';
+export const APP_VERSION = '1.14.0';
 
 export const RELEASE_HISTORY: ReleaseNote[] = [
+  {
+    version: '1.14.0',
+    releaseDate: '2026-09-15',
+    type: 'minor',
+    title: 'کشف همسایگان با پروتکل‌های CDP و LLDP (شبکه محلی، رنج Subnet یا انتخاب سوئیچ) و افزودن مستقیم به توپولوژی شماتیک',
+    title_en: 'CDP & LLDP Neighbor Discovery (Local Network, Subnet Range, or Per-Switch Query) & Schematic Topology Import',
+    changes: [
+      'پیاده‌سازی ماژول کاوش همسایگان لایه ۲ در بخش توپولوژی شماتیک (Schematic Topology) از طریق پروتکل‌های سیسکو CDP و استاندارد IEEE LLDP',
+      'پشتیبانی از ۳ حالت کاوش: ۱) تحلیل کارت شبکه محلی سیستم، ۲) اسکن رنج شبکه (CIDR Subnet Sweep)، ۳) اجرای مستقیم روی سوئیچ یا روتر منتخب',
+      'افزودن دکمه دسترسی سریع «کشف همسایگان این سوئیچ» در پنل مشخصات هر سوئیچ و روتر با انتخاب خودکار آن تجهیز به عنوان مبدا کاوش',
+      'افزودن مدال تعاملی پیشرفته CdpLldpTopologyDiscoveryModal با فیلتر پروتکل (CDP / LLDP / Both)، جستجو، تفکیک تجهیزات جدید و موجود در نقشه',
+      'قابلیت انتخاب گروهی همسایگان شناسایی‌شده و افزودن آنی سوئیچ‌ها و روترها به همراه پورت‌ها و لینک‌های فیزیکی مستقیم به توپولوژی شبکه با چیدمان هوشمند بدون تداخل',
+      'پشتیبانی کامل از هر دو بک‌اند Express (Node.js) و Python با اندپوینت‌های اختصاصی /api/cdp-lldp/discover و /api/cdp-lldp/import-neighbors'
+    ],
+    changes_en: [
+      'Implemented Layer 2 CDP & LLDP Neighbor Discovery inside the Schematic Topology view supporting Cisco CDP and IEEE 802.1AB LLDP protocols',
+      'Supported 3 discovery operational modes: 1) Local Host Network sniff, 2) Subnet CIDR Range sweep, 3) Direct CLI query on a selected switch or router',
+      'Added quick-action "Discover Neighbors (CDP/LLDP)" button directly in the switch details panel to automatically pre-select that switch as source',
+      'Designed interactive high-contrast CdpLldpTopologyDiscoveryModal with protocol filtering, live search, new vs existing device badges, and port mappings',
+      'Integrated one-click batch import to automatically register discovered switches and routers, provision ports, generate physical links, and position nodes cleanly on the canvas',
+      'Full dual-backend synchronization in Express (Node.js) and Python with /api/cdp-lldp/discover and /api/cdp-lldp/import-neighbors endpoints'
+    ]
+  },
   {
     version: '1.13.1',
     releaseDate: '2026-09-12',

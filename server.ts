@@ -14,6 +14,10 @@ import {
   testRealTelnetConnection,
   setupTelnetWebSocketServer
 } from './server/telnetManager';
+import {
+  discoverCdpLldp,
+  importNeighbors
+} from './server/cdpLldpDiscovery';
 
 // Safely determine current directory and project root in both CJS bundle and TSX ESM dev mode
 const getCurrentDir = () => {
@@ -227,6 +231,53 @@ app.post('/api/ssh/sync-device', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: `Synchronization error: ${err.message}`
+    });
+  }
+});
+
+// CDP & LLDP Neighbor Discovery endpoint (supports single switch query, subnet range, or local network)
+app.post('/api/cdp-lldp/discover', async (req: Request, res: Response) => {
+  try {
+    const { mode, deviceId, subnet, protocol, sshPort, timeoutMs } = req.body || {};
+    const result = await discoverCdpLldp(projectRoot, {
+      mode: mode || 'device',
+      deviceId,
+      subnet,
+      protocol: protocol || 'all',
+      sshPort,
+      timeoutMs
+    });
+    res.json(result);
+  } catch (err: any) {
+    console.error('[CDP/LLDP Discovery] Error in /api/cdp-lldp/discover:', err);
+    res.status(500).json({
+      success: false,
+      message: `خطای کاوش همسایگان: ${err.message}`,
+      message_en: `Discovery failed: ${err.message}`
+    });
+  }
+});
+
+// Import discovered CDP/LLDP neighbors directly into network topology
+app.post('/api/cdp-lldp/import-neighbors', async (req: Request, res: Response) => {
+  try {
+    const { neighbors } = req.body || {};
+    if (!neighbors || !Array.isArray(neighbors) || neighbors.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'هیچ همسایه‌ای برای افزودن به توپولوژی انتخاب نشده است.',
+        message_en: 'No neighbors selected to import into topology.'
+      });
+    }
+
+    const result = await importNeighbors(projectRoot, neighbors);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[CDP/LLDP Import] Error in /api/cdp-lldp/import-neighbors:', err);
+    res.status(500).json({
+      success: false,
+      message: `خطای ثبت همسایگان در توپولوژی: ${err.message}`,
+      message_en: `Import failed: ${err.message}`
     });
   }
 });

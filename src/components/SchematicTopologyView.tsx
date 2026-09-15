@@ -38,7 +38,8 @@ import {
   Box,
   Boxes,
   Map as MapIcon,
-  MousePointer
+  MousePointer,
+  Radio
 } from 'lucide-react';
 import {
   TopologyData,
@@ -55,6 +56,7 @@ import { CustomMapPortSelectorModal } from './CustomMapPortSelectorModal';
 import { CustomMapLinkConfigModal } from './CustomMapLinkConfigModal';
 import { CustomMapAddDeviceModal } from './CustomMapAddDeviceModal';
 import { CustomMapManageModal } from './CustomMapManageModal';
+import { CdpLldpTopologyDiscoveryModal } from './CdpLldpTopologyDiscoveryModal';
 import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 
 interface SchematicTopologyViewProps {
@@ -206,6 +208,11 @@ export const SchematicTopologyView: React.FC<SchematicTopologyViewProps> = ({
   const isFullMode = propIsFullMode !== undefined ? propIsFullMode : internalFullMode;
   const [showToolbarInFullMode, setShowToolbarInFullMode] = useState(false);
   const [isLegendOpen, setIsLegendOpen] = useState(false);
+
+  // CDP & LLDP Neighbor Discovery Modal state
+  const [isCdpDiscoveryModalOpen, setIsCdpDiscoveryModalOpen] = useState<boolean>(false);
+  const [cdpPreselectedDeviceId, setCdpPreselectedDeviceId] = useState<string | null>(null);
+  const [cdpInitialMode, setCdpInitialMode] = useState<'device' | 'subnet' | 'local'>('device');
 
   // Storage keys for custom topology maps persistence
   const CUSTOM_MAPS_STORAGE_KEY = 'nettopology_custom_maps_v2';
@@ -1905,6 +1912,21 @@ export const SchematicTopologyView: React.FC<SchematicTopologyViewProps> = ({
               <span>{isScanning ? t('topology_scanning') : t('topology_scan_cdp_lldp')}</span>
             </button>
 
+            {/* CDP/LLDP Discovery & Topology Import Modal Trigger */}
+            <button
+              id="btn-topology-cdp-discovery-modal"
+              onClick={() => {
+                setCdpPreselectedDeviceId(null);
+                setCdpInitialMode('device');
+                setIsCdpDiscoveryModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-semibold shadow-md transition active:scale-95 border border-emerald-400/30"
+              title={isEn ? "Discover neighbors via local network, subnet range, or selected switch & import to topology" : "کشف همسایگان با CDP/LLDP (شبکه محلی، رنج Subnet یا انتخاب سوئیچ) و افزودن به توپولوژی"}
+            >
+              <Radio className="w-3.5 h-3.5 text-emerald-200 animate-pulse" />
+              <span>{isEn ? 'CDP/LLDP Discovery & Add' : 'کشف و افزودن همسایگان (CDP/LLDP)'}</span>
+            </button>
+
             {/* Canvas Controls */}
             {viewMode === 'schematic' && (
               <div className="flex items-center gap-1.5">
@@ -3485,6 +3507,21 @@ export const SchematicTopologyView: React.FC<SchematicTopologyViewProps> = ({
                 <Cable className="w-3.5 h-3.5" />
                 <span>{t('topology_view_ports_vlan_btn')}</span>
               </button>
+
+              {(selectedNode.type === 'switch' || selectedNode.type === 'router') && (
+                <button
+                  id="btn-cdp-discover-node"
+                  onClick={() => {
+                    setCdpPreselectedDeviceId(selectedNode.id);
+                    setCdpInitialMode('device');
+                    setIsCdpDiscoveryModalOpen(true);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium text-xs shadow-lg transition active:scale-98 border border-emerald-400/20"
+                >
+                  <Radio className="w-3.5 h-3.5 text-emerald-200 animate-pulse" />
+                  <span>{isEn ? 'Discover Neighbors (CDP/LLDP)' : 'کاوش همسایگان این سوئیچ (CDP/LLDP)'}</span>
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -4261,6 +4298,19 @@ export const SchematicTopologyView: React.FC<SchematicTopologyViewProps> = ({
           onCreateMap={handleCreateCustomMap}
           onUpdateMap={handleUpdateCustomMap}
           onDeleteMap={handleDeleteCustomMap}
+        />
+      )}
+
+      {isCdpDiscoveryModalOpen && (
+        <CdpLldpTopologyDiscoveryModal
+          isOpen={isCdpDiscoveryModalOpen}
+          onClose={() => setIsCdpDiscoveryModalOpen(false)}
+          devices={allAvailableDevices}
+          preselectedDeviceId={cdpPreselectedDeviceId}
+          initialMode={cdpInitialMode}
+          onTopologyUpdated={() => {
+            onRefresh();
+          }}
         />
       )}
       </div>

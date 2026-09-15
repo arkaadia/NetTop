@@ -2,7 +2,10 @@ import {
   Device,
   SwitchPort,
   CdpLldpNeighbor,
+  DiscoveredNeighbor,
+  CdpLldpDiscoveryParams,
   TopologyData,
+  TopologyLink,
   VlanInfo,
   ConfigTemplate,
   TemplateApplyResult,
@@ -202,6 +205,44 @@ export async function runCdpLldpScan(): Promise<{
     headers: { 'Content-Type': 'application/json' },
   });
   if (!res.ok) throw new Error('Failed to run CDP/LLDP scan');
+  return res.json();
+}
+
+export async function discoverCdpLldpNeighbors(params: CdpLldpDiscoveryParams): Promise<{
+  success: boolean;
+  message: string;
+  message_en?: string;
+  source_info: any;
+  neighbors: DiscoveredNeighbor[];
+}> {
+  const res = await fetch(`${API_BASE}/cdp-lldp/discover`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.message || 'Failed to discover CDP/LLDP neighbors');
+  }
+  return res.json();
+}
+
+export async function importCdpLldpNeighbors(neighbors: DiscoveredNeighbor[]): Promise<{
+  success: boolean;
+  message: string;
+  message_en?: string;
+  added_devices: Device[];
+  added_links: TopologyLink[];
+}> {
+  const res = await fetch(`${API_BASE}/cdp-lldp/import-neighbors`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ neighbors }),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.message || 'Failed to import CDP/LLDP neighbors to topology');
+  }
   return res.json();
 }
 
