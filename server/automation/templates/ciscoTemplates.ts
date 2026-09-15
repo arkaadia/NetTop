@@ -386,11 +386,16 @@ export const CiscoTemplates = {
     interfaces: string[]; // e.g. ["GigabitEthernet1/0/1", "GigabitEthernet1/0/2"]
     mode: 'active' | 'passive' | 'desirable' | 'auto' | 'on';
     protocol?: 'lacp' | 'pagp';
-    portType: 'trunk' | 'access';
-    vlanOrAllowed: string;
+    portType?: 'trunk' | 'access';
+    portMode?: 'trunk' | 'access';
+    vlanOrAllowed?: string;
+    allowedVlans?: string;
+    nativeVlan?: number | string;
     description?: string;
   }): GeneratedConfigResult {
     const cid = params.channelId;
+    const pMode = params.portMode || params.portType || 'trunk';
+    const vlans = params.allowedVlans || params.vlanOrAllowed || 'all';
     const cmds: string[] = ['configure terminal'];
 
     // Put member interfaces into channel-group
@@ -405,15 +410,18 @@ export const CiscoTemplates = {
     // Configure Port-Channel master interface
     cmds.push(`interface Port-channel${cid}`);
     if (params.description) cmds.push(` description ${params.description}`);
-    if (params.portType === 'trunk') {
+    if (pMode === 'trunk') {
       cmds.push(' switchport trunk encapsulation dot1q');
       cmds.push(' switchport mode trunk');
-      if (params.vlanOrAllowed && params.vlanOrAllowed !== 'all') {
-        cmds.push(` switchport trunk allowed vlan ${params.vlanOrAllowed}`);
+      if (params.nativeVlan) {
+        cmds.push(` switchport trunk native vlan ${params.nativeVlan}`);
+      }
+      if (vlans && vlans.toLowerCase() !== 'all') {
+        cmds.push(` switchport trunk allowed vlan ${vlans}`);
       }
     } else {
       cmds.push(' switchport mode access');
-      cmds.push(` switchport access vlan ${params.vlanOrAllowed || '1'}`);
+      cmds.push(` switchport access vlan ${vlans || '1'}`);
     }
     cmds.push(' no shutdown');
     cmds.push('exit');

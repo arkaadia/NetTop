@@ -152,7 +152,11 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
   - **روتینگ پیشرفته:** Static Routing با وزن و اینترفیس خروجی، پروتکل OSPFv2 چند ناحیه‌ای همراه با Router-ID و اینترفیس‌های Passive، پروتکل BGP Peering تک و چند همسایه با Remote-AS و Update-Source، و ویزارد خودکار اتصال نقطه به نقطه (P2P Interconnect) جهت پیکربندی متقارن دو سر لینک روی دو روتر همزمان.
   - **سوئیچینگ لایه ۲:** پورت‌های Access، ترانک‌های 802.1Q با هماهنگی Native VLAN و ویلن‌های مجاز، فعال‌سازی PortFast و BPDU Guard برای پیشگیری قطعی از حلقه‌های سوئیچینگ.
   - **بانک اطلاعاتی VLAN و SVI:** ایجاد تکی یا دسته‌جمعی ویلن‌ها با گرامر فشرده (نظیر `10,20,30-50`) و تعریف خودکار Interface VLAN همراه با IP و ساب‌نت ماسک.
-  - **سرویس‌های پیشرفته سازمانی:** تجمیع پورت EtherChannel (LACP Active/Passive/On)، پروتکل Spanning Tree (PVST+, Rapid-PVST, MSTP, Root Primary/Secondary)، تونل‌های امن GRE، پایش پایداری و تاخیر با IP SLA و ردگیری ICMP، مترجم آدرس شبکه NAT (Overload/PAT/Pool)، و سرور DHCP اختصاصی با رنج‌های مستثنی‌شده (Excluded Addresses).
+  - **سرویس‌های پیشرفته سازمانی:** 
+    - **تجمیع پورت EtherChannel و LACP دوطرفه (Dual-Switch Cross-LACP Orchestration):** قابلیت منحصر‌به‌فرد برای اتصال و کانفیگ همزمان دو سوئیچ متقابل شبکه (Switch A ↔ Switch B) با اعتبارسنجی هماهنگ، پیش‌تنظیم‌های مذاکره (`Active ↔ Active`، `Active ↔ Passive`، `Static On ↔ On`)، اینترفیس‌های عضو و هماهنگی ترانک 802.1Q همراه با رول‌بک ایمن در صورت عدم موفقیت سوئیچ دوم.
+    - **حالت تک‌سوئیچ (Single Switch Mode):** امکان تنظیم مستقل EtherChannel روی یک سوئیچ منفرد با پروتکل‌های LACP و PAgP و استاتیک.
+    - **پروتکل Spanning Tree (STP):** مدیریت PVST+، Rapid-PVST، MSTP، انتخاب Root Primary/Secondary و تنظیم اولویت و هزینه پورت.
+    - **سایر سرویس‌های زیرساختی:** تونل‌های امن GRE، پایش پایداری و تاخیر با IP SLA و ردگیری ICMP، مترجم آدرس شبکه NAT (Overload/PAT/Pool)، و سرور DHCP اختصاصی با رنج‌های مستثنی‌شده (Excluded Addresses).
   - **انطباق و هاردنینگ امنیتی (CIS Hardening & Live Audit):** اسکن زنده پیکربندی سوئیچ و روتر، محاسبه شاخص سلامت امنیتی (۰ تا ۱۰۰)، ارزیابی پسورد سکرت Type 5/8/9، احراز هویت AAA، رمزنگاری سرویس‌ها، غیرفعال‌سازی سرویس‌های منسوخ Telnet/HTTP، کنترل دسترسی SSH با ACL، فعال‌سازی تاخیر ورود لاگین و بنر هشدار سازمانی، همراه با دکمه مستقیم Remediation برای رفع فوری هر آسیب‌پذیری با دستورات رسمی سیسکو.
 - **پشتیبانی کامل از تجهیزات میکروتیک (MikroTik RouterOS Suite):**
   - راه‌اندازی تونل‌های امن WireGuard VPN شامل Interface، پورت Listen، کلیدهای عمومی و همتایان (Peers) مجاز.
@@ -352,7 +356,11 @@ npm start
   - **Routing & Dynamic Protocols:** Static IPv4 routes with next-hop metrics, multi-area OSPFv2 with Router-ID and passive interfaces, BGP peering with neighbor policies, and a symmetric Point-to-Point (P2P) Interconnect Wizard configuring both routers simultaneously.
   - **Layer-2/Layer-3 Switching:** Access port assignments, 802.1Q trunking with custom Native VLANs and Allowed VLAN lists, PortFast edge activation, and BPDU Guard loop defense.
   - **VLAN & SVI Engine:** Single and batch VLAN provisioning with concise range syntax (`10,20,30-50`) and automated Switched Virtual Interface (SVI) creation with IP addresses and subnet masks.
-  - **Advanced Enterprise Services:** LACP / EtherChannel port bundling (Active, Passive, On modes), Spanning Tree tuning (PVST+, Rapid-PVST, MSTP, Root Primary/Secondary, Port Costs), secure GRE tunnels, IP SLA ICMP-Echo latency probes, NAT/PAT translation (Overload, Pools), and local DHCP IP Pools with exclusion ranges.
+  - **Advanced Enterprise Services:** 
+    - **Dual-Switch Cross-LACP Orchestration:** Coordinated side-by-side bundling between two interconnected physical switches (Switch A ↔ Switch B) with atomic pre-checks, negotiation presets (`Active ↔ Active`, `Active ↔ Passive`, `Static On ↔ On`), symmetric member interface mapping, 802.1Q trunk alignment, and automated rollback if Switch B fails.
+    - **Single-Switch EtherChannel:** Standalone port aggregation using LACP, PAgP, or manual mode on individual switches.
+    - **Spanning Tree Tuning:** PVST+, Rapid-PVST, MSTP, Root Primary/Secondary election, priority assignment, and port costs.
+    - **Infrastructure & Core Services:** Secure point-to-point GRE tunnels, IP SLA ICMP-Echo failover monitoring, NAT/PAT translation (Overload, Pools, Port Forwarding), and local DHCP Server IP Pools with exclusion ranges.
   - **CIS Hardening & Live Audit:** Live device configuration scanning, 0-100 posture score calculation, evaluation of secret hashing (Type 5/8/9), AAA new-model, service password encryption, Telnet/HTTP legacy service disabling, SSH ACL access-class restrictions, login delay enforcement, and single-click automated remediation.
 - **MikroTik RouterOS Suite:**
   - High-performance WireGuard VPN tunnels with interface configuration, listen ports, public keys, and peer route filtering.

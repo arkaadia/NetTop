@@ -277,6 +277,24 @@ app.post('/api/automation/preview', async (req: Request, res: Response) => {
   }
 });
 
+// 1.b Dual-Switch Preview (Cross-Switch LACP / Dual Devices)
+app.post('/api/automation/preview-dual', async (req: Request, res: Response) => {
+  try {
+    const { taskA, taskB } = req.body || {};
+    if (!taskA || !taskB) {
+      return res.status(400).json({ error: 'Both taskA and taskB payloads are required.' });
+    }
+    const [resultA, resultB] = await Promise.all([
+      automationEngine.preview(taskA),
+      automationEngine.preview(taskB)
+    ]);
+    res.json({ switchA: resultA, switchB: resultB });
+  } catch (err: any) {
+    console.error('[Automation Preview-Dual Error]:', err);
+    res.status(500).json({ error: err.message || 'Failed to generate dual automation preview.' });
+  }
+});
+
 // 2. Full Apply Execution with Pre-Backup and Post-Verification
 app.post('/api/automation/apply', async (req: Request, res: Response) => {
   try {
@@ -289,6 +307,24 @@ app.post('/api/automation/apply', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('[Automation Apply Error]:', err);
     res.status(500).json({ error: err.message || 'Failed to apply automation configuration.' });
+  }
+});
+
+// 2.b Dual-Switch Apply Execution with Cross-Switch Protection
+app.post('/api/automation/apply-dual', async (req: Request, res: Response) => {
+  try {
+    const { taskA, taskB, autoRollbackOnFailure, user } = req.body || {};
+    if (!taskA || !taskB) {
+      return res.status(400).json({ error: 'Both taskA and taskB are required for dual orchestration.' });
+    }
+    const result = await automationEngine.applyDual(taskA, taskB, {
+      autoRollbackOnFailure: autoRollbackOnFailure !== false,
+      user: user || 'admin'
+    });
+    res.json(result);
+  } catch (err: any) {
+    console.error('[Automation Apply-Dual Error]:', err);
+    res.status(500).json({ error: err.message || 'Failed to apply dual automation configuration.' });
   }
 });
 

@@ -280,6 +280,102 @@ export class ConfigEngine {
     };
   }
 
+  // 2. Dual-Switch Coordinated Apply (e.g. Cross-Switch LACP)
+  async applyDual(
+    taskA: AutomationTaskRequest,
+    taskB: AutomationTaskRequest,
+    options?: { autoRollbackOnFailure?: boolean; user?: string }
+  ): Promise<{
+    overallSuccess: boolean;
+    switchA: ApplyExecutionResult;
+    switchB: ApplyExecutionResult;
+    error?: string;
+  }> {
+    console.log(`[ConfigEngine] Starting Dual-Switch Orchestration (Switch A: ${taskA.deviceId}, Switch B: ${taskB.deviceId})...`);
+
+    // 1. Validate both tasks first
+    const valA = validateAutomationTask(taskA);
+    const valB = validateAutomationTask(taskB);
+
+    if (!valA.valid || !valB.valid) {
+      const errA = valA.valid ? '' : `Switch A: ${valA.errors.join('; ')}`;
+      const errB = valB.valid ? '' : `Switch B: ${valB.errors.join('; ')}`;
+      const combined = [errA, errB].filter(Boolean).join(' | ');
+
+      const failResultA: ApplyExecutionResult = {
+        success: false,
+        commandsExecuted: [],
+        executionOutput: '',
+        verification: { verified: false, checks: [], summary: 'Validation rejected.' },
+        error: errA || 'Cross-validation aborted',
+        auditId: ''
+      };
+      const failResultB: ApplyExecutionResult = {
+        success: false,
+        commandsExecuted: [],
+        executionOutput: '',
+        verification: { verified: false, checks: [], summary: 'Validation rejected.' },
+        error: errB || 'Cross-validation aborted',
+        auditId: ''
+      };
+      return { overallSuccess: false, switchA: failResultA, switchB: failResultB, error: combined };
+    }
+
+    // 2. Apply to Switch A first
+    console.log(`[ConfigEngine] Applying to Switch A (${taskA.deviceId})...`);
+    const resultA = await this.apply(taskA, { autoRollbackOnFailure: options?.autoRollbackOnFailure, user: options?.user });
+
+    if (!resultA.success) {
+      const skippedB: ApplyExecutionResult = {
+        success: false,
+        commandsExecuted: [],
+        executionOutput: 'Skipped because Switch A failed execution or verification.',
+        verification: { verified: false, checks: [], summary: 'Execution skipped due to Switch A failure.' },
+        error: 'Aborted due to Switch A failure',
+        auditId: ''
+      };
+      return {
+        overallSuccess: false,
+        switchA: resultA,
+        switchB: skippedB,
+        error: `Switch A failed: ${resultA.error || 'Execution / verification failed'}`
+      };
+    }
+
+    // 3. Switch A succeeded, apply to Switch B
+    console.log(`[ConfigEngine] Switch A succeeded. Applying to Switch B (${taskB.deviceId})...`);
+    const resultB = await this.apply(taskB, { autoRollbackOnFailure: options?.autoRollbackOnFailure, user: options?.user });
+
+    if (!resultB.success) {
+      // Switch B failed after Switch A succeeded!
+      if (options?.autoRollbackOnFailure) {
+        console.warn(`[ConfigEngine] Switch B failed. Rolling back Switch A (${taskA.deviceId}) to prevent loop or mismatch...`);
+        try {
+          const adapterA = this.getAdapter(taskA.vendor || 'cisco');
+          const previewA = await adapterA.generateConfigPreview(taskA);
+          await this.rollback(taskA.deviceId, resultA.backupId, previewA.rollbackCommands);
+          resultA.rolledBack = true;
+          resultA.rollbackOutput = 'Rolled back Switch A due to Switch B configuration failure';
+        } catch (rbErr: any) {
+          console.error(`[ConfigEngine] Error during Switch A rollback:`, rbErr);
+        }
+      }
+
+      return {
+        overallSuccess: false,
+        switchA: resultA,
+        switchB: resultB,
+        error: `Switch B failed: ${resultB.error || 'Verification failed'}. Switch A was automatically protected.`
+      };
+    }
+
+    return {
+      overallSuccess: true,
+      switchA: resultA,
+      switchB: resultB
+    };
+  }
+
   // 3. Rollback Action
   async rollback(deviceId: string, backupId?: string, customRollbackCmds?: string[]): Promise<{
     success: boolean;

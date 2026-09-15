@@ -1,0 +1,37 @@
+[
+  {
+    "user": "admin",
+    "deviceId": "dev-core-01",
+    "deviceName": "SW-CORE-01",
+    "deviceIp": "192.168.1.1",
+    "vendor": "cisco",
+    "category": "routing",
+    "actionName": "routerToRouter",
+    "parameters": {
+      "routerAName": "SW-CORE-01",
+      "routerAInterface": "GigabitEthernet0/0/1",
+      "routerAAddress": "10.255.255.1",
+      "routerBName": "RT-EDGE-01",
+      "routerBInterface": "GigabitEthernet0/0/1",
+      "routerBAddress": "10.255.255.2",
+      "subnetMask": "255.255.255.252",
+      "routingProtocol": "static"
+    },
+    "commands": [
+      "configure terminal",
+      "interface GigabitEthernet0/0/1",
+      " description P2P-LINK-TO-RT-EDGE-01",
+      " ip address 10.255.255.1 255.255.255.252",
+      " no shutdown",
+      "exit",
+      "exit"
+    ],
+    "status": "rolled_back",
+    "riskLevel": "low",
+    "verificationPassed": false,
+    "verificationSummary": "Timed out while waiting for handshake",
+    "error": "Timed out while waiting for handshake",
+    "id": "audit-1789468326434-cg3v3g",
+    "timestamp": "2026-09-15T10:32:06.434Z"
+  }
+]

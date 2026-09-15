@@ -26,6 +26,24 @@ export interface ApplyResult {
   auditId: string;
 }
 
+export interface DualPreviewResult {
+  switchA: {
+    validation: ValidationResult;
+    preview: ConfigPreview;
+  };
+  switchB: {
+    validation: ValidationResult;
+    preview: ConfigPreview;
+  };
+}
+
+export interface DualApplyResult {
+  overallSuccess: boolean;
+  switchA: ApplyResult;
+  switchB: ApplyResult;
+  error?: string;
+}
+
 export async function getAutomationPreview(task: AutomationTaskRequest): Promise<{
   validation: ValidationResult;
   preview: ConfigPreview;
@@ -38,6 +56,22 @@ export async function getAutomationPreview(task: AutomationTaskRequest): Promise
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Preview failed' }));
     throw new Error(err.error || 'Failed to generate preview');
+  }
+  return res.json();
+}
+
+export async function getAutomationPreviewDual(
+  taskA: AutomationTaskRequest,
+  taskB: AutomationTaskRequest
+): Promise<DualPreviewResult> {
+  const res = await fetch('/api/automation/preview-dual', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ taskA, taskB })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Dual preview failed' }));
+    throw new Error(err.error || 'Failed to generate dual preview');
   }
   return res.json();
 }
@@ -55,6 +89,24 @@ export async function applyAutomation(
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Apply execution failed' }));
     throw new Error(err.error || 'Apply execution failed');
+  }
+  return res.json();
+}
+
+export async function applyAutomationDual(
+  taskA: AutomationTaskRequest,
+  taskB: AutomationTaskRequest,
+  autoRollbackOnFailure: boolean = true,
+  user: string = 'admin'
+): Promise<DualApplyResult> {
+  const res = await fetch('/api/automation/apply-dual', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ taskA, taskB, autoRollbackOnFailure, user })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Dual apply execution failed' }));
+    throw new Error(err.error || 'Dual apply execution failed');
   }
   return res.json();
 }
