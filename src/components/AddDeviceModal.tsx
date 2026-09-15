@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { X, Network, Server, Wifi, Router as RouterIcon, ShieldCheck, MapPin, FileCode2, Activity, CheckCircle2, XCircle, RefreshCw, Terminal, Eye, EyeOff, Key, Play, ShieldAlert, Sparkles, Radio } from 'lucide-react';
-import { Device, DeviceType, ConfigTemplate, DeviceConnectionTestResult, RealSshTestResult, SwitchPort, RealSwitchDiscoveryResult } from '../types';
-import { fetchTemplates, testRawIpConnection, testRealSsh, discoverRealSwitch } from '../services/api';
+import { Device, DeviceType, ConfigTemplate, DeviceConnectionTestResult, RealSshTestResult, SwitchPort, RealSwitchDiscoveryResult, RealTelnetTestResult } from '../types';
+import { fetchTemplates, testRawIpConnection, testRealSsh, testRealTelnet, discoverRealSwitch } from '../services/api';
 import { useLanguage } from '../i18n/LanguageContext';
 import { RealSshTerminalModal } from './RealSshTerminalModal';
+import { RealTelnetTerminalModal } from './RealTelnetTerminalModal';
 import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 
 interface AddDeviceModalProps {
@@ -34,6 +35,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
   const [lldpEnabled, setLldpEnabled] = useState(true);
   const [snmpCommunity, setSnmpCommunity] = useState('public');
   const [sshPort, setSshPort] = useState(22);
+  const [telnetPort, setTelnetPort] = useState(23);
   const [sshUsername, setSshUsername] = useState('admin');
   const [sshPassword, setSshPassword] = useState('cisco123');
   const [enablePassword, setEnablePassword] = useState('cisco');
@@ -48,6 +50,9 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
   const [isTestingSsh, setIsTestingSsh] = useState(false);
   const [sshTestResult, setSshTestResult] = useState<RealSshTestResult | null>(null);
   const [isSshTerminalOpen, setIsSshTerminalOpen] = useState(false);
+  const [isTestingTelnet, setIsTestingTelnet] = useState(false);
+  const [telnetTestResult, setTelnetTestResult] = useState<RealTelnetTestResult | null>(null);
+  const [isTelnetTerminalOpen, setIsTelnetTerminalOpen] = useState(false);
 
   // Live Switch Hardware & Port Discovery State
   const [isDiscovering, setIsDiscovering] = useState(false);
@@ -132,6 +137,34 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
       });
     } finally {
       setIsTestingSsh(false);
+    }
+  };
+
+  const handleTestRealTelnet = async () => {
+    if (!ip.trim()) {
+      setError(isEn ? 'Please enter device IP address first' : 'لطفاً ابتدا آدرس IP تجهیز را وارد کنید');
+      return;
+    }
+    setError(null);
+    setIsTestingTelnet(true);
+    setTelnetTestResult(null);
+
+    try {
+      const res = await testRealTelnet({
+        host: ip.trim(),
+        port: Number(telnetPort) || 23,
+        timeoutMs: 5000,
+      });
+      setTelnetTestResult(res);
+    } catch (err: any) {
+      setTelnetTestResult({
+        host: ip.trim(),
+        port: Number(telnetPort) || 23,
+        success: false,
+        message: err.message || (isEn ? 'Telnet connection failed' : 'خطا در برقراری اتصال تلنت'),
+      });
+    } finally {
+      setIsTestingTelnet(false);
     }
   };
 
@@ -247,6 +280,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
         lldp_enabled: lldpEnabled,
         snmp_community: snmpCommunity.trim(),
         ssh_port: Number(sshPort) || 22,
+        telnet_port: Number(telnetPort) || 23,
         ssh_username: sshUsername.trim() || 'admin',
         ssh_password: sshPassword,
         enable_password: enablePassword,
@@ -496,14 +530,21 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
               </div>
             </div>
 
-            {/* SSH Credentials & Terminal Access */}
+            {/* SSH & Telnet Credentials & Terminal Access */}
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
-              <div className="flex items-center gap-2 text-indigo-700 text-xs font-bold">
-                <Terminal className="w-4 h-4 text-indigo-600" />
-                <span>{isEn ? 'SSH Credentials & Terminal Access:' : 'مشخصات دسترسی SSH و خط فرمان (CLI):'}</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-indigo-700 text-xs font-bold">
+                  <Terminal className="w-4 h-4 text-indigo-600" />
+                  <span>{isEn ? 'Remote Access Credentials (SSH & Telnet):' : 'مشخصات دسترسی از راه دور (SSH و Telnet):'}</span>
+                </div>
+                <div className="flex items-center gap-2 text-[11px] text-slate-500 font-mono">
+                  <span>SSH: 22</span>
+                  <span>•</span>
+                  <span>Telnet: {telnetPort}</span>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
                 <div>
                   <label className="block text-[11px] font-medium text-slate-700 mb-1">
                     {isEn ? 'SSH Port:' : 'پورت SSH:'}
@@ -513,6 +554,20 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                     value={sshPort}
                     onChange={(e) => setSshPort(Number(e.target.value))}
                     className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-800 text-xs focus:outline-none focus:border-indigo-500 font-mono text-left"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-700 mb-1">
+                    {isEn ? 'Telnet Port:' : 'پورت تلنت:'}
+                  </label>
+                  <input
+                    type="number"
+                    value={telnetPort}
+                    onChange={(e) => setTelnetPort(Number(e.target.value))}
+                    placeholder="23"
+                    className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-800 text-xs focus:outline-none focus:border-amber-500 font-mono text-left"
                     dir="ltr"
                   />
                 </div>
@@ -567,7 +622,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                 </div>
               </div>
 
-              {/* SSH Real Connection Testing, Discovery & Interactive Terminal Action Bar */}
+              {/* SSH & Telnet Real Connection Testing, Discovery & Interactive Terminal Action Bar */}
               <div className="pt-2 border-t border-slate-200/80 space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
@@ -586,7 +641,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                       ) : (
                         <>
                           <Sparkles className="w-3.5 h-3.5 text-emerald-200" />
-                          <span>{isEn ? 'Fetch Real Ports from Switch (SSH)' : 'دریافت مشخصات و پورت‌های واقعی از سوئیچ'}</span>
+                          <span>{isEn ? 'Fetch Real Ports (SSH)' : 'دریافت مشخصات و پورت‌های واقعی (SSH)'}</span>
                         </>
                       )}
                     </button>
@@ -600,12 +655,32 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                       {isTestingSsh ? (
                         <>
                           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>{isEn ? 'Connecting Port 22...' : 'در حال تست پورت ۲۲...'}</span>
+                          <span>{isEn ? 'Testing SSH...' : 'در حال تست SSH...'}</span>
                         </>
                       ) : (
                         <>
                           <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
                           <span>{isEn ? 'Test SSH Auth' : 'تست احراز هویت SSH'}</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleTestRealTelnet}
+                      disabled={isTestingTelnet || !ip.trim()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-semibold transition cursor-pointer disabled:opacity-50"
+                      title={isEn ? 'Perform genuine TCP Telnet connection test to port' : 'تست اتصال واقعی تلنت به پورت تجهیز'}
+                    >
+                      {isTestingTelnet ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                          <span>{isEn ? `Testing Port ${telnetPort}...` : `تست پورت ${telnetPort}...`}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Radio className="w-3.5 h-3.5 text-amber-600" />
+                          <span>{isEn ? 'Test Telnet' : 'تست اتصال تلنت'}</span>
                         </>
                       )}
                     </button>
@@ -622,7 +697,23 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-slate-700 text-xs font-semibold shadow-xs transition cursor-pointer"
                     >
                       <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>{isEn ? 'Cisco CLI Terminal' : 'ترمینال CLI سیسکو'}</span>
+                      <span>{isEn ? 'Cisco SSH CLI' : 'ترمینال SSH سیسکو'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!ip.trim()) {
+                          setError(isEn ? 'Please enter IP address first' : 'لطفاً ابتدا آدرس IP را وارد کنید');
+                          return;
+                        }
+                        setIsTelnetTerminalOpen(true);
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 border border-amber-500/40 text-xs font-semibold shadow-xs transition cursor-pointer"
+                      title={isEn ? 'Open real interactive Telnet terminal session' : 'باز کردن نشست خط فرمان ترمینال تلنت واقعی'}
+                    >
+                      <Terminal className="w-3.5 h-3.5 text-amber-400" />
+                      <span>{isEn ? 'Telnet CLI' : 'ترمینال تلنت زنده'}</span>
                     </button>
                   </div>
 
@@ -722,6 +813,38 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                   {sshTestResult.banner && (
                     <div className="mt-1.5 text-[10px] font-mono text-slate-600 bg-white/70 p-1.5 rounded border border-slate-200">
                       {sshTestResult.banner}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Telnet Test Result Display */}
+              {telnetTestResult && (
+                <div
+                  className={`p-2.5 rounded-lg text-xs border ${
+                    telnetTestResult.success
+                      ? 'bg-amber-50 border-amber-300 text-amber-900'
+                      : 'bg-rose-50 border-rose-200 text-rose-800'
+                  }`}
+                >
+                  <div className="flex items-center justify-between font-semibold">
+                    <div className="flex items-center gap-1.5">
+                      {telnetTestResult.success ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                      )}
+                      <span>{telnetTestResult.message}</span>
+                    </div>
+                    {telnetTestResult.latency_ms !== undefined && (
+                      <span className="px-2 py-0.5 rounded bg-amber-200 text-amber-900 font-mono text-[10px]">
+                        {telnetTestResult.latency_ms} ms
+                      </span>
+                    )}
+                  </div>
+                  {telnetTestResult.banner && (
+                    <div className="mt-1.5 text-[10px] font-mono text-slate-700 bg-white/80 p-1.5 rounded border border-amber-200 whitespace-pre-wrap">
+                      {telnetTestResult.banner}
                     </div>
                   )}
                 </div>
@@ -898,6 +1021,15 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
         initialUsername={sshUsername.trim() || 'admin'}
         initialPassword={sshPassword}
         initialEnablePassword={enablePassword}
+      />
+
+      {/* Interactive Real Telnet Terminal Window */}
+      <RealTelnetTerminalModal
+        isOpen={isTelnetTerminalOpen}
+        onClose={() => setIsTelnetTerminalOpen(false)}
+        initialHost={ip.trim()}
+        initialPort={Number(telnetPort) || 23}
+        deviceName={name.trim() || (isEn ? 'New Device' : 'تجهیز جدید')}
       />
     </div>
   );

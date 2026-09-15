@@ -167,6 +167,17 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
   - ذخیره‌سازی خودکار نسخه کامل `running-config` پیش از اعمال هر دستور، امکان مشاهده Diff و محتوای اسنپ‌شات، و بازگردانی بلادرنگ (Rollback) با یک کلیک.
   - ثبت تغییرات در دفتر کل مانیتورینگ شامل مشخصات کاربر، زمان دقیق، نام دیوایس، کلیه خطوط ارسالی، وضعیت راستی‌آزمایی و لاگ جامع خطاها.
 
+### ۱۴. قابلیت تست و اتصال تلنت واقعی (Real Telnet Socket & CLI Terminal)
+- **پشتیبانی کامل از پروتکل استاندارد RFC 854 Telnet بدون داده‌های فیک یا ساختگی:**
+  - ارتباط مستقیم با پورت‌های تلنت شبکه (پیش‌فرض ۲۳ یا پورت‌های کنسول و سوئیچ دلخواه نظیر ۲۳۲۳، ۵۰۰۰، ۲۰۲۳ و...) از طریق سوکت TCP در سطح بک‌اند Node.js (`net.Socket`).
+- **تست پورت و عیب‌یابی آنی در پنجره ثبت تجهیز جدید (`AddDeviceModal`):**
+  - امکان تنظیم پورت اختصاصی تلنت (`Telnet Port`) در کنار SSH.
+  - دکمه **تست اتصال تلنت (Test Telnet)** با محاسبه دقیق میلی‌ثانیه‌ای تاخیر (Latency ms)، تشخیص باز یا بسته بودن پورت، خطاهای واقعی شبکه (`ECONNREFUSED`، `ETIMEDOUT`، `EHOSTUNREACH`) و نمایش آنی بنر خوش‌آمدگویی یا پرامپت ارسالی از سمت سوئیچ یا روتر واقعی.
+- **ترمینال زنده تلنت دوطرفه تحت وب‌سوکت (`RealTelnetTerminalModal` / `/ws/telnet`):**
+  - پیاده‌سازی گیت‌وی بلادرنگ وب‌سوکت برای استریمینگ دوطرفه کاراکترها و کلیدهای کنترلی بدون کوچک‌ترین شبیه‌سازی یا دیتای ماک.
+  - فیلترینگ و مذاکره استاندارد بایت‌های IAC (شامل NAWS برای ابعاد ترمینال، TTYPE برای xterm-256color، SGA و ECHO).
+  - دارای نوار ابزار کامل شامل دکمه‌های پرکاربرد سیسکو (`terminal length 0`, `enable`, `show version`, `show ip int brief`, `show run`, `exit`)، کلید ارسال بازگشت خط `[Enter ↵]`، قابلیت ذخیره و دانلود لاگ کامل نشست متنی، و تغییر زنده آدرس IP و پورت بدون نیاز به بستن صفحه.
+
 ---
 
 ## ساختار معماری و تکنولوژی‌ها
@@ -370,6 +381,16 @@ npm start
 - **Automated Snapshot Vault & Governance Audit Trail:**
   - Automatic running-config snapshots before every push, built-in diff viewer, and instant one-click hardware rollback.
   - Tamper-evident execution ledger recording timestamps, active users, executed CLI commands, verification summaries, and full rollback telemetry.
+
+### 14. Real Telnet Engine & Interactive Terminal (RFC 854 Live Socket)
+- **Zero Mock / 100% Genuine Network Telnet Socket:**
+  - Real TCP socket streaming powered by native Node.js `net.Socket` capable of connecting to standard Telnet port 23 or any custom terminal server / console ports (e.g., 2323, 2001, 5000).
+- **Live Diagnostics & Port Probing in New Device Modal (`AddDeviceModal`):**
+  - Dedicated Telnet port configuration field alongside SSH credentials.
+  - **Test Telnet** button performing actual TCP handshakes, measuring millisecond latency, diagnosing true network errors (`ECONNREFUSED`, `ETIMEDOUT`, `ENETUNREACH`), and capturing welcome banners or login prompts directly from the physical hardware.
+- **Full Bidirectional Interactive Telnet Terminal (`RealTelnetTerminalModal` / `/ws/telnet`):**
+  - Dedicated WebSocket gateway at `/ws/telnet` with Telnet RFC 854 negotiation handling (NAWS window resizing, Terminal Type `xterm-256color`, SGA, ECHO).
+  - Quick Cisco macro buttons (`term len 0`, `enable`, `show version`, `show ip int brief`, `show run`, `exit`), history navigation, session log download, and live host/port retargeting.
 
 ---
 

@@ -25,6 +25,7 @@ export interface Device {
   has_unsaved_changes?: boolean;
   last_modified_time?: string;
   ssh_port?: number;
+  telnet_port?: number;
   ssh_username?: string;
   ssh_password?: string;
   enable_password?: string;
@@ -71,6 +72,21 @@ export interface RealSshTestResult {
     cipher?: string;
     keyExchange?: string;
   };
+}
+
+export interface RealTelnetTestRequest {
+  host: string;
+  port?: number;
+  timeoutMs?: number;
+}
+
+export interface RealTelnetTestResult {
+  success: boolean;
+  message: string;
+  latency_ms?: number;
+  banner?: string;
+  host: string;
+  port: number;
 }
 
 export interface RealSwitchDiscoveryResult {

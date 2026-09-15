@@ -362,6 +362,19 @@ export async function testRealSsh(params: import('../types').RealSshTestRequest)
   return res.json();
 }
 
+export async function testRealTelnet(params: import('../types').RealTelnetTestRequest): Promise<import('../types').RealTelnetTestResult> {
+  const res = await fetch(`${API_BASE}/telnet/test`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({ message: 'Telnet testing service unreachable' }));
+    throw new Error(errData.message || 'Telnet connection failed');
+  }
+  return res.json();
+}
+
 export async function discoverRealSwitch(
   params: import('../types').RealSshTestRequest
 ): Promise<import('../types').RealSwitchDiscoveryResult> {

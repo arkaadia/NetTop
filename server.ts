@@ -10,6 +10,10 @@ import {
   syncDeviceWithRealSwitch,
   applyPortConfigViaSsh
 } from './server/sshManager';
+import {
+  testRealTelnetConnection,
+  setupTelnetWebSocketServer
+} from './server/telnetManager';
 
 // Safely determine current directory and project root in both CJS bundle and TSX ESM dev mode
 const getCurrentDir = () => {
@@ -110,6 +114,34 @@ app.post('/api/ssh/test', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: `SSH test error: ${err.message}`
+    });
+  }
+});
+
+// Real Telnet testing and diagnostics endpoint (handled natively by Node.js net.Socket)
+app.post('/api/telnet/test', async (req: Request, res: Response) => {
+  try {
+    const { host, port, timeoutMs } = req.body || {};
+    if (!host) {
+      return res.status(400).json({
+        success: false,
+        message: 'Host is required for Telnet test'
+      });
+    }
+
+    console.log(`[Telnet Service] Performing real Telnet connection test to ${host}:${port || 23}...`);
+    const result = await testRealTelnetConnection({
+      host,
+      port: Number(port) || 23,
+      timeoutMs: Number(timeoutMs) || 5000
+    });
+
+    res.json(result);
+  } catch (err: any) {
+    console.error('[Telnet Service] Unexpected error in /api/telnet/test:', err);
+    res.status(500).json({
+      success: false,
+      message: `Telnet test error: ${err.message}`
     });
   }
 });
@@ -440,8 +472,9 @@ async function startServer() {
   // Create unified HTTP server for Express and WebSocket
   const server = http.createServer(app);
 
-  // Initialize interactive SSH WebSocket gateway
+  // Initialize interactive SSH and Telnet WebSocket gateways
   setupSshWebSocketServer(server);
+  setupTelnetWebSocketServer(server);
 
   const HOST = process.env.HOST || '0.0.0.0';
   server.listen(PORT, HOST, () => {

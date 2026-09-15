@@ -1529,6 +1529,7 @@ class NetworkAPIHandler(BaseHTTPRequestHandler):
                 "last_seen": "Just now" if is_reachable else "Unreachable",
                 "total_ports": int(body.get("total_ports", 24)),
                 "ssh_port": int(body.get("ssh_port", 22)),
+                "telnet_port": int(body.get("telnet_port", 23)),
                 "ssh_username": body.get("ssh_username", "admin"),
                 "ssh_password": body.get("ssh_password", ""),
                 "enable_password": body.get("enable_password", ""),
