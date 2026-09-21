@@ -42,6 +42,14 @@ except ImportError:
         scan_lan_subnet
     )
 
+try:
+    from backend.remote_desktop import handle_remote_desktop_request
+except ImportError:
+    try:
+        from remote_desktop import handle_remote_desktop_request
+    except ImportError:
+        handle_remote_desktop_request = None
+
 # Data file path
 DATA_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(DATA_DIR, "network_data.json")
@@ -1191,6 +1199,14 @@ class NetworkAPIHandler(BaseHTTPRequestHandler):
         path = url.path
         data = load_data()
 
+        if path.startswith("/api/remote-test"):
+            if handle_remote_desktop_request:
+                status_code, res = handle_remote_desktop_request("GET", self.path, query=parse_qs(url.query))
+                self._send_json(status_code, res)
+            else:
+                self._send_json(503, {"error": "Remote Desktop module unavailable"})
+            return
+
         if path == "/api/health":
             self._send_json(200, {
                 "status": "online",
@@ -1407,6 +1423,14 @@ class NetworkAPIHandler(BaseHTTPRequestHandler):
         path = url.path
         body = self._read_body()
         data = load_data()
+
+        if path.startswith("/api/remote-test"):
+            if handle_remote_desktop_request:
+                status_code, res = handle_remote_desktop_request("POST", self.path, body=body, query=parse_qs(url.query))
+                self._send_json(status_code, res)
+            else:
+                self._send_json(503, {"error": "Remote Desktop module unavailable"})
+            return
 
         if path == "/api/switch/test-connection":
             ip = body.get("ip", "127.0.0.1")
@@ -2106,6 +2130,14 @@ class NetworkAPIHandler(BaseHTTPRequestHandler):
         body = self._read_body()
         data = load_data()
 
+        if path.startswith("/api/remote-test"):
+            if handle_remote_desktop_request:
+                status_code, res = handle_remote_desktop_request("PUT", self.path, body=body, query=parse_qs(url.query))
+                self._send_json(status_code, res)
+            else:
+                self._send_json(503, {"error": "Remote Desktop module unavailable"})
+            return
+
         if path.startswith("/api/devices/") and "/ports" in path:
             self._handle_port_update(path, body, data)
             return
@@ -2154,6 +2186,14 @@ class NetworkAPIHandler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         path = url.path
         data = load_data()
+
+        if path.startswith("/api/remote-test"):
+            if handle_remote_desktop_request:
+                status_code, res = handle_remote_desktop_request("DELETE", self.path, query=parse_qs(url.query))
+                self._send_json(status_code, res)
+            else:
+                self._send_json(503, {"error": "Remote Desktop module unavailable"})
+            return
 
         if path.startswith("/api/devices/"):
             dev_id = path.split("/")[3]

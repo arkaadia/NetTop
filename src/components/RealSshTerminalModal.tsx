@@ -42,7 +42,7 @@ import { Device, SwitchPort, VlanInfo } from '../types';
 interface RealSshTerminalModalProps {
   isOpen: boolean;
   onClose: () => void;
-  device?: Device | null;
+  device?: Partial<Device> | null;
   initialHost?: string;
   initialPort?: number;
   initialUsername?: string;

@@ -15,6 +15,9 @@ import {
   setupTelnetWebSocketServer
 } from './server/telnetManager';
 import {
+  setupRemoteDesktopWebSocketServer
+} from './server/remoteDesktopTunnel';
+import {
   discoverCdpLldp,
   importNeighbors
 } from './server/cdpLldpDiscovery';
@@ -526,6 +529,7 @@ async function startServer() {
   // Initialize interactive SSH and Telnet WebSocket gateways
   setupSshWebSocketServer(server);
   setupTelnetWebSocketServer(server);
+  setupRemoteDesktopWebSocketServer(server);
 
   const HOST = process.env.HOST || '0.0.0.0';
   server.listen(PORT, HOST, () => {

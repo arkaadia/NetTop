@@ -1,61 +1,47 @@
-# ==============================================================================
-# NetTopology Enterprise - Production Container Image
-# Multi-stage Docker build for React Frontend, Node.js SSH Gateway, and Python Engine
-# ==============================================================================
+FROM node:22-bullseye-slim
 
-FROM node:20-slim AS builder
-
-WORKDIR /app
-
-# Install system build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
-    make \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install node dependencies
-COPY package.json package-lock.json* bun.lock* ./
-RUN npm install --legacy-peer-deps
-
-# Copy source files
-COPY . .
-
-# Compile React frontend and bundle backend server
-RUN npm run build
-
-# ==============================================================================
-# Runtime Stage
-# ==============================================================================
-FROM node:20-slim AS runner
-
-WORKDIR /app
-
-ENV NODE_ENV=production
-ENV PORT=3000
-ENV HOST=0.0.0.0
-ENV PYTHON_PORT=5001
-
-# Install runtime Python, OpenSSH client, iputils-ping, and traceroute
+# Install Python 3, pip, and network diagnostics utilities
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
+    python3-dev \
+    gcc \
     iputils-ping \
-    traceroute \
+    netcat \
+    telnet \
+    openssh-client \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy built production assets and bundled server
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/backend ./backend
+WORKDIR /app
 
-EXPOSE 3000 5001
+# Install Python backend dependencies
+RUN pip3 install --no-cache-dir --break-system-packages \
+    fastapi \
+    uvicorn \
+    pydantic \
+    cryptography \
+    paramiko \
+    netmiko
 
-# Healthcheck to ensure API and WebSocket gateway are operational
-HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl -f http://127.0.0.1:3000/api/status/bridge || exit 1
+# Copy package manifests and install npm dependencies
+COPY package*.json ./
+RUN npm install
 
-# Start the bundled Node.js server (which auto-spawns Python backend & SSH Gateway)
+# Copy application sources
+COPY . .
+
+# Build frontend and production assets
+RUN npm run build
+
+EXPOSE 3000
+EXPOSE 5001
+
+ENV PORT=3000
+ENV PYTHON_PORT=5001
+ENV BACKEND_PORT=5001
+ENV GUACD_HOST=guacd
+ENV GUACD_PORT=4822
+ENV NODE_ENV=production
+
 CMD ["node", "dist/server.cjs"]

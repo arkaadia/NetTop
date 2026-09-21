@@ -5,8 +5,9 @@ import { useLanguage } from '../i18n/LanguageContext';
 import { COMPONENT_WORKFLOWS } from '../data/componentWorkflows';
 
 interface WorkflowTriggerBadgeProps {
-  targetId: string;
-  variant?: 'modal-header' | 'card-header' | 'icon' | 'pill' | 'button';
+  targetId?: string;
+  componentName?: string;
+  variant?: 'modal-header' | 'card-header' | 'icon' | 'pill' | 'button' | 'card';
   className?: string;
   label?: string;
   showLabel?: boolean;
@@ -14,6 +15,7 @@ interface WorkflowTriggerBadgeProps {
 
 export const WorkflowTriggerBadge: React.FC<WorkflowTriggerBadgeProps> = ({
   targetId,
+  componentName,
   variant = 'modal-header',
   className = '',
   label,
@@ -22,12 +24,15 @@ export const WorkflowTriggerBadge: React.FC<WorkflowTriggerBadgeProps> = ({
   const { openComponentWorkflow } = useWorkflow();
   const { isEn } = useLanguage();
 
-  const workflowInfo = COMPONENT_WORKFLOWS[targetId];
+  const effectiveTargetId = targetId || componentName || '';
+  const workflowInfo = COMPONENT_WORKFLOWS[effectiveTargetId];
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation(); // prevent parent clicks
     e.preventDefault();
-    openComponentWorkflow(targetId);
+    if (effectiveTargetId) {
+      openComponentWorkflow(effectiveTargetId);
+    }
   };
 
   const defaultTooltip = isEn
@@ -64,7 +69,7 @@ export const WorkflowTriggerBadge: React.FC<WorkflowTriggerBadgeProps> = ({
     );
   }
 
-  if (variant === 'card-header') {
+  if (variant === 'card-header' || variant === 'card') {
     return (
       <button
         type="button"

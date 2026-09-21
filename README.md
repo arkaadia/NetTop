@@ -10,14 +10,16 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
   - [معرفی پروژه](#معرفی-پروژه)
   - [ویژگی‌ها و قابلیت‌های کلیدی](#ویژگیها-و-قابلیتهای-کلیدی)
   - [ساختار معماری و تکنولوژی‌ها](#ساختار-معماری-و-تکنولوژیها)
-  - [راهنمای نصب و راه‌اندازی](#راهنمای-نصب-و-راهاندازی)
+  - [راهنمای نصب اختصاصی ماژول Remote Test و ویندوز RDP](#راهنمای-نصب-اختصاصی-ماژول-remote-test-و-ویندوز-rdp)
+  - [راهنمای نصب و راه‌اندازی کلی سامانه روی لینوکس](#راهنمای-نصب-و-راهاندازی-روی-لینوکس-linux-installation)
   - [اسکریپت‌های سیستمی](#اسکریپتهای-سیستمی)
   - [دستورالعمل توسعه و مشارکت هوش مصنوعی](#دستورالعمل-توسعه-و-مشارکت-هوش-مصنوعی)
 - [Part 2: English Documentation](#part-2-english-documentation)
   - [Project Overview](#project-overview)
   - [Key Features](#key-features)
   - [System Architecture & Stack](#system-architecture--stack)
-  - [Installation & Setup](#installation--setup)
+  - [Dedicated Remote Test (Windows RDP) Installation Guide](#dedicated-remote-test-windows-rdp-installation-guide)
+  - [General Installation & Setup (Linux)](#installation--setup-linux)
   - [System Scripts](#system-scripts)
   - [AI Agent Instructions](#ai-agent-instructions)
 
@@ -186,6 +188,21 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
   - فیلترینگ و مذاکره استاندارد بایت‌های IAC (شامل NAWS برای ابعاد ترمینال، TTYPE برای xterm-256color، SGA و ECHO).
   - دارای نوار ابزار کامل شامل دکمه‌های پرکاربرد سیسکو (`terminal length 0`, `enable`, `show version`, `show ip int brief`, `show run`, `exit`)، کلید ارسال بازگشت خط `[Enter ↵]`، قابلیت ذخیره و دانلود لاگ کامل نشست متنی، و تغییر زنده آدرس IP و پورت بدون نیاز به بستن صفحه.
 
+### ۱۵. ماژول تست ریموت و اتصال زنده ریموت دسکتاپ ویندوز (Remote Test / Windows RDP)
+- **ارتباط زنده RDP بدون هیچ‌گونه شبیه‌سازی یا دیتای ساختگی:**
+  - اتصال ریموت دسکتاپ مرورگری به ماشین‌های ویندوز سرور و کلاینت بر بستر استاندارد **Apache Guacamole** و دیمن `guacd:4822`.
+- **ترجمه آنی پروتکل به HTML5 Canvas و وب‌سوکت دوطرفه:**
+  - مسیر استریم `/ws/remote-desktop` همراه با انتقال بلادرنگ تصویر دسکتاپ، ماوس، کیبورد، اسکرول و ژست‌های لمسی.
+- **امکانات حرفه‌ای سشن ریموت:**
+  - ارسال مستقیم ماکروی `Ctrl + Alt + Delete`
+  - کلید اختصاصی `Windows Key (Super)`
+  - همگام‌سازی دوطرفه حافظه کلیپ‌بورد (Clipboard Sync) بین مرورگر و ویندوز هدف
+  - پشتیبانی از حالت تمام‌صفحه (Fullscreen) و مقیاس‌پذیری خودکار رزولوشن دسکتاپ
+- **بانک اختصاصی تجهیزات ویندوز و تست عیب‌یابی پورت:**
+  - ثبت مشخصات ماشین‌ها (IP، پورت پیش‌فرض ۳۳۸۹ یا پورت‌های دلخواه، نام کاربری و دامنه).
+  - دکمه **Test Connection** برای اعتبارسنجی زنده پورت TCP ۳۳۸۹ و محاسبه میلی‌ثانیه‌ای تاخیر قبل از ورود به سشن.
+  - رمزنگاری کلیدهای عبور در بک‌اند با استاندارد PBKDF2 و AES-256 و محافظت از طریق توکن‌های موقت سشن ۶۰ ثانیه‌ای.
+
 ---
 
 ## ساختار معماری و تکنولوژی‌ها
@@ -196,7 +213,93 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
 
 ---
 
-## راهنمای نصب و راه‌اندازی روی لینوکس (Linux Installation)
+## راهنمای نصب اختصاصی ماژول Remote Test و ویندوز RDP
+
+ماژول **Remote Test** جهت ارائه تجربه روان، امن و بدون تاخیر اتصال به ریموت دسکتاپ ویندوز در مرورگر، از پروتکل استاندارد **Apache Guacamole** و سرویس پروکسی `guacd` استفاده می‌کند.
+
+```
+┌─────────────────────────────────┐       WebSocket       ┌────────────────────────┐      TCP 4822      ┌────────────────────┐      TCP 3389      ┌─────────────────────────┐
+│ مرورگر کلاینت (HTML5 Canvas UI) │ ◄───────────────────► │ NetTopology Gateway    │ ◄────────────────► │ guacd Daemon       │ ◄────────────────► │ ماشین هدف ویندوز        │
+│ React + RemoteDesktopSession    │   /ws/remote-desktop  │ Node.js / Express      │   Guacamole Proto  │ (Docker / Native)  │   Native RDP       │ (Windows 10/11/Server)  │
+└─────────────────────────────────┘                       └────────────────────────┘                    └────────────────────┘                    └─────────────────────────┘
+```
+
+برای اجرای این ماژول دو روش زیر در دسترس است:
+
+### روش اول: راه‌اندازی سریع با Docker Compose (پیشنهاد شده)
+ساده‌ترین و پایدارترین روش که به صورت خودکار `guacd` و کل سرویس NetTopology را با تمامی وابستگی‌ها بالا می‌آورد:
+
+```bash
+# ۱. رفتن به دایرکتوری پروژه
+cd NetTop
+
+# ۲. اجرای کانتینرها در پس‌زمینه
+docker compose up -d
+
+# ۳. بررسی وضعیت کانتینرها
+docker compose ps
+```
+کانتینرهای زیر ایجاد و اجرا می‌شوند:
+- `nettopology-guacd`: دیمن رسمی آپاچی گوآکامولی روی پورت `4822`
+- `nettopology-app`: اپلیکیشن NetTopology روی پورت `3000` و بک‌اند پایتون روی پورت `5001`
+
+داشبورد بلافاصله روی آدرس `http://localhost:3000` در دسترس خواهد بود و وضعیت اتصال guacd در تب **Remote Test** سبز خواهد شد.
+
+---
+
+### روش دوم: نصب مستقیم روی سرور لینوکس (بدون Docker Compose)
+
+#### ۱. نصب و راه‌اندازی سرویس guacd
+روی سرور لینوکسی خود (Ubuntu / Debian):
+```bash
+# نصب پکیج guacd از مخازن رسمی
+sudo apt update
+sudo apt install -y guacd libguac-client-rdp0
+
+# فعال‌سازی و استارت سرویس
+sudo systemctl enable guacd
+sudo systemctl start guacd
+
+# بررسی وضعیت سرویس
+sudo systemctl status guacd
+```
+> **نکته با Docker مجزا برای guacd:** اگر ترجیح می‌دهید فقط guacd در داکر باشد:
+> ```bash
+> docker run -d --name nettop-guacd --restart unless-stopped -p 4822:4822 guacamole/guacd:1.5.5
+> ```
+
+#### ۲. تنظیم متغیرهای محیطی در `.env`
+یک فایل `.env` در ریشه پروژه ایجاد یا ویرایش کنید:
+```env
+PORT=3000
+GUACD_HOST=localhost
+GUACD_PORT=4822
+RDP_ENCRYPTION_KEY=your-super-secret-vault-key-32-chars-min
+```
+
+#### ۳. نصب وابستگی‌ها و اجرای برنامه
+```bash
+npm install
+npm run build
+npm start
+```
+
+---
+
+### چک‌لیست آماده‌سازی ماشین ویندوز هدف (Target Windows Host)
+جهت برقراری اتصال موفق، مطمئن شوید که روی سیستم ویندوزی:
+1. **فعال بودن Remote Desktop:** مسیر `Settings > System > Remote Desktop` فعال (On) باشد.
+2. **فایروال ویندوز:** پورت `3389 TCP` باز باشد:
+   ```powershell
+   # در صورت نیاز در PowerShell Admin ویندوز:
+   Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+   ```
+3. **دسترسی کاربر:** حساب کاربری دارای کلمه عبور بوده و عضو گروه `Remote Desktop Users` یا `Administrators` باشد.
+4. **تست پورت با پنل:** در تب **Remote Test**، کلید **[Test Connection]** را بزنید تا تاخیر و وضعیت پورت ۳۳۸۹ اعتبارسنجی شود.
+
+---
+
+## راهنمای نصب و راه‌اندازی کلی سامانه روی لینوکس (Linux Installation)
 
 ### پیش‌نیازها
 - Node.js نسخه 18 یا بالاتر (یا Bun)
@@ -409,17 +512,113 @@ npm start
   - Dedicated WebSocket gateway at `/ws/telnet` with Telnet RFC 854 negotiation handling (NAWS window resizing, Terminal Type `xterm-256color`, SGA, ECHO).
   - Quick Cisco macro buttons (`term len 0`, `enable`, `show version`, `show ip int brief`, `show run`, `exit`), history navigation, session log download, and live host/port retargeting.
 
+### 15. Remote Test & Live Windows Remote Desktop (RDP / Apache Guacamole)
+- **Zero Simulation / Real In-Browser Windows RDP Experience:**
+  - Browser-based Remote Desktop to Windows workstations and servers powered by the official **Apache Guacamole** protocol engine and `guacd:4822` daemon.
+- **HTML5 Canvas & Bidirectional WebSocket Streaming:**
+  - Dedicated streaming pipeline via `/ws/remote-desktop` delivering smooth display rendering, low-latency mouse tracking, full keyboard input, scrolling, and touch events.
+- **Full In-Session Desktop Controls:**
+  - One-click `Ctrl + Alt + Delete` macro injection.
+  - Dedicated `Windows Key (Super)` trigger.
+  - Bidirectional clipboard text synchronization between browser and remote Windows host.
+  - Fullscreen toggle and automated desktop viewport scaling.
+- **Windows Device Vault & Live Handshake Diagnostics:**
+  - Manage Windows hosts (IP, standard port 3389 or custom RDP port, domain, credentials).
+  - Real **Test Connection** button verifying TCP 3389 socket accessibility and millisecond latency before starting the session.
+  - Server-side credential encryption (PBKDF2-HMAC-SHA256 authenticated vault) with short-lived 60-second session handshake tokens.
+
 ---
 
 ## System Architecture & Stack
 - **Client Framework:** React 18+, TypeScript, Tailwind CSS v4, Motion, Lucide Icons
 - **Server Runtime:** Node.js, Express, Bun / Tsx
-- **Protocols & Simulation:** RESTful API with simulated Cisco IOS-XE parser engine
+- **Protocols & Simulation:** RESTful API with simulated Cisco IOS-XE parser engine, Apache Guacamole RDP Gateway (`guacd`), RFC 854 Telnet socket engine
 - **Style System:** Tailored CSS custom properties with strict light/dark theme overrides
 
 ---
 
-## Installation & Setup (Linux)
+## Dedicated Remote Test (Windows RDP) Installation Guide
+
+The **Remote Test** module delivers a zero-install, in-browser Windows Remote Desktop experience by bridging standard RDP (TCP 3389) through the **Apache Guacamole** `guacd` daemon to an interactive HTML5 Canvas.
+
+```
+┌─────────────────────────────────┐       WebSocket       ┌────────────────────────┐      TCP 4822      ┌────────────────────┐      TCP 3389      ┌─────────────────────────┐
+│ Browser Client (HTML5 Canvas)   │ ◄───────────────────► │ NetTopology Gateway    │ ◄────────────────► │ guacd Daemon       │ ◄────────────────► │ Target Windows Machine  │
+│ React + RemoteDesktopSession    │   /ws/remote-desktop  │ Node.js / Express      │   Guacamole Proto  │ (Docker / Native)  │   Native RDP       │ (Win 10/11/Server)      │
+└─────────────────────────────────┘                       └────────────────────────┘                    └────────────────────┘                    └─────────────────────────┘
+```
+
+You can deploy and run this module using either of the two methods below:
+
+### Method 1: Instant Setup with Docker Compose (Recommended)
+This is the fastest, fully automated deployment that launches `guacd` and NetTopology with all dependencies:
+
+```bash
+# 1. Navigate to project root
+cd NetTop
+
+# 2. Launch services in detached mode
+docker compose up -d
+
+# 3. Check container status
+docker compose ps
+```
+Containers launched:
+- `nettopology-guacd`: Official Apache Guacamole daemon on port `4822`
+- `nettopology-app`: NetTopology web app on port `3000` & Python backend on port `5001`
+
+Access the UI immediately at `http://localhost:3000`. The **guacd** indicator on the **Remote Test** tab will light up green.
+
+---
+
+### Method 2: Manual Linux Server Setup (Without Docker Compose)
+
+#### 1. Install and Start guacd Daemon
+On Ubuntu / Debian:
+```bash
+sudo apt update
+sudo apt install -y guacd libguac-client-rdp0
+
+sudo systemctl enable guacd
+sudo systemctl start guacd
+sudo systemctl status guacd
+```
+> **Alternative with standalone Docker for guacd only:**
+> ```bash
+> docker run -d --name nettop-guacd --restart unless-stopped -p 4822:4822 guacamole/guacd:1.5.5
+> ```
+
+#### 2. Configure Environment Variables
+Create or edit `.env` in the project root:
+```env
+PORT=3000
+GUACD_HOST=localhost
+GUACD_PORT=4822
+RDP_ENCRYPTION_KEY=your-super-secret-vault-key-32-chars-min
+```
+
+#### 3. Build & Run NetTopology
+```bash
+npm install
+npm run build
+npm start
+```
+
+---
+
+### Target Windows Machine Configuration Checklist
+To ensure seamless RDP connectivity:
+1. **Enable Remote Desktop:** In Windows, open `Settings > System > Remote Desktop` and toggle to **On**.
+2. **Allow Through Windows Firewall:** Ensure TCP port `3389` is open:
+   ```powershell
+   Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+   ```
+3. **User Permissions:** Verify your Windows user account has a password set and belongs to `Remote Desktop Users` or `Administrators`.
+4. **Diagnostic Probe:** In NetTopology's **Remote Test** tab, click **[Test Connection]** to confirm connectivity and measure latency before opening the live session.
+
+---
+
+## General Installation & Setup (Linux)
 
 ### Prerequisites
 - Node.js 18+ (or Bun)

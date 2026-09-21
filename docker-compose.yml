@@ -1,23 +1,48 @@
 version: '3.8'
 
 services:
-  nettopology:
+  # Apache Guacamole Proxy Daemon (guacd)
+  # Provides translation between Guacamole web protocol and native Windows RDP (TCP 3389)
+  guacd:
+    image: guacamole/guacd:1.5.5
+    container_name: nettopology-guacd
+    restart: unless-stopped
+    ports:
+      - "4822:4822"
+    environment:
+      - GUACD_LOG_LEVEL=info
+    networks:
+      - nettop-net
+
+  # NetTopology & Remote Test Application
+  # React Frontend + Express Gateway + Python Backend (FastAPI / Network Engine)
+  app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: nettopology_panel
+    container_name: nettopology-app
     restart: unless-stopped
-    # Using host network allows direct TCP SSH port 22 access to switches and local subnets
-    network_mode: "host"
+    ports:
+      - "3000:3000"
+      - "5001:5001"
     environment:
-      - NODE_ENV=production
       - PORT=3000
-      - HOST=0.0.0.0
       - PYTHON_PORT=5001
+      - BACKEND_PORT=5001
+      - GUACD_HOST=guacd
+      - GUACD_PORT=4822
+      - RDP_ENCRYPTION_KEY=nettopology-rdp-secure-key-v1-production-vault
+      - NODE_ENV=production
+    depends_on:
+      - guacd
     volumes:
-      - ./backend/network_data.json:/app/backend/network_data.json
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/api/status/bridge"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
+      - nettop-data:/app/backend
+    networks:
+      - nettop-net
+
+networks:
+  nettop-net:
+    driver: bridge
+
+volumes:
+  nettop-data:

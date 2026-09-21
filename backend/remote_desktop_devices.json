@@ -1,0 +1,36 @@
+{
+  "devices": [
+    {
+      "id": "win-srv-01",
+      "name": "Windows Server 01",
+      "hostname": "192.168.10.50",
+      "port": 3389,
+      "username": "administrator",
+      "encrypted_password": "enc:v1:E9ZnY91tdxxbv5SzSKLPiH46ryGiYFUnKBYGd8_9uhizupHlMuZmqjbHdqeBZVBh0KgDgtJuOinOvFznZgJJogIEDSXKBQ6LlHfdHis=",
+      "domain": "CORP",
+      "enabled": true,
+      "created_at": "2026-09-21T10:35:49Z",
+      "updated_at": "2026-09-21T10:35:49Z",
+      "last_connected_at": null,
+      "connection_status": "Ready",
+      "last_error": null,
+      "latency_ms": null
+    },
+    {
+      "id": "win-dc-01",
+      "name": "AD-DC-01 (Domain Controller)",
+      "hostname": "192.168.10.10",
+      "port": 3389,
+      "username": "domain_admin",
+      "encrypted_password": "enc:v1:sEL23tRbAuywaYB3-w-7uz9gsU14QMibGGvVOxfHbvDYOOPajH1gv2f9PyR-YhappL6RMq8a28VWnj9sFn8WpbAoXB2bdlaIxEtTxmrivh-WvQ-oaUg=",
+      "domain": "CORP.LOCAL",
+      "enabled": true,
+      "created_at": "2026-09-21T10:35:49Z",
+      "updated_at": "2026-09-21T10:35:49Z",
+      "last_connected_at": null,
+      "connection_status": "Ready",
+      "last_error": null,
+      "latency_ms": null
+    }
+  ]
+}

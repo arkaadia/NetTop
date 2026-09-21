@@ -11,11 +11,12 @@ import {
   FileCode2,
   Layers,
   Activity,
-  Cpu
+  Cpu,
+  Monitor
 } from 'lucide-react';
 import { useLanguage } from '../i18n';
 
-export type ActiveTab = 'dashboard' | 'devices' | 'schematic' | 'templates' | 'ports' | 'scanner' | 'automation';
+export type ActiveTab = 'dashboard' | 'devices' | 'schematic' | 'templates' | 'ports' | 'scanner' | 'automation' | 'remote-test';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -35,7 +36,7 @@ interface NavItem {
 }
 
 interface NavParentGroup {
-  id: 'infra' | 'monitor' | 'automation';
+  id: 'infra' | 'monitor' | 'automation' | 'remote';
   titleKey: string;
   tagKey: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -124,6 +125,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
       ],
     },
+    {
+      id: 'remote',
+      titleKey: 'parent_remote_title',
+      tagKey: 'parent_remote_tag',
+      icon: Monitor,
+      colorClass: 'text-sky-400 border-sky-500/30 bg-sky-500/10',
+      items: [
+        {
+          id: 'remote-test',
+          labelKey: 'tab_remote_test',
+          icon: Monitor,
+          badge: 'RDP',
+        },
+      ],
+    },
   ];
 
   // Which parent accordion is currently expanded (Default state is open: 'infra')
@@ -162,7 +178,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return (
       <button
         key={item.id}
-        onClick={() => setActiveTab(item.id)}
+        onClick={() => {
+          setActiveTab(item.id);
+          if (item.id === 'remote-test') {
+            if (window.location.pathname !== '/remote-test') {
+              window.history.pushState(null, '', '/remote-test');
+            }
+          } else {
+            if (window.location.pathname === '/remote-test') {
+              window.history.pushState(null, '', '/');
+            }
+          }
+        }}
         title={isCollapsed ? label : undefined}
         className={`sidebar-nav-item w-full flex items-center ${
           isCollapsed ? 'justify-center px-2' : isRtl ? 'justify-between pr-3 pl-2.5 text-right' : 'justify-between pl-3 pr-2.5 text-left'

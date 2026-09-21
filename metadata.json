@@ -1,6 +1,6 @@
 {
   "name": "NetTopology & Device Manager",
-  "description": "پنل مدیریت تجهیزات شبکه، مانیتورینگ لحظه‌ای، اسکن همسایگی CDP/LLDP، نقشه شماتیک توپولوژی، اتوماسیون پیشرفته سیسکو و میکروتیک و بررسی پورت‌ها و VLAN با بک‌اند پایتون",
+  "description": "پنل مدیریت تجهیزات شبکه، مانیتورینگ لحظه‌ای، اسکن همسایگی CDP/LLDP، نقشه شماتیک توپولوژی، اتوماسیون پیشرفته سیسکو و میکروتیک، مدیریت پورت‌ها و ماژول Remote Test برای اتصال زنده ریموت دسکتاپ ویندوز (RDP) با بک‌اند پایتون و Apache Guacamole",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

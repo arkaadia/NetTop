@@ -83,7 +83,7 @@ export const LanScannerModal: React.FC<LanScannerModalProps> = ({
     try {
       const res = await importScannedDevice({
         ip: dev.ip,
-        hostname: dev.hostname !== 'Unknown' ? dev.hostname : undefined,
+        hostname: dev.hostname !== 'Unknown' ? dev.hostname : dev.ip,
         device_type: dev.device_type,
         role: dev.role,
         latency_ms: dev.latency_ms,

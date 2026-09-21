@@ -16,7 +16,7 @@ import {
   Trash2,
   Plus
 } from 'lucide-react';
-import { ConfigTemplate, TemplateVariable, Device } from '../types';
+import { ConfigTemplate, TemplateVariable, Device, TemplateTargetType } from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
 import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 
@@ -38,10 +38,10 @@ export const CloneTemplateModal: React.FC<CloneTemplateModalProps> = ({
   const { t, isEn } = useLanguage();
   const [name, setName] = useState('');
   const [vendor, setVendor] = useState<'cisco' | 'mikrotik' | 'generic'>('cisco');
-  const [targetType, setTargetType] = useState<'switch' | 'router' | 'all'>('switch');
+  const [targetType, setTargetType] = useState<TemplateTargetType>('switch');
   const [role, setRole] = useState('');
   const [description, setDescription] = useState('');
-  const [defaultCliMode, setDefaultCliMode] = useState<'GLOBAL_CONFIG' | 'PRIVILEGED_EXEC' | 'ROUTEROS'>('GLOBAL_CONFIG');
+  const [defaultCliMode, setDefaultCliMode] = useState<string>('GLOBAL_CONFIG');
   const [commands, setCommands] = useState('');
   const [variables, setVariables] = useState<TemplateVariable[]>([]);
 
@@ -55,14 +55,14 @@ export const CloneTemplateModal: React.FC<CloneTemplateModalProps> = ({
     if (sourceTemplate && isOpen) {
       setName(`${sourceTemplate.name} ${isEn ? '(Cloned)' : '(کلون تجهیز جدید)'}`);
       setVendor(sourceTemplate.vendor);
-      setTargetType(sourceTemplate.target_type);
+      setTargetType(sourceTemplate.target_type || 'switch');
       setRole(sourceTemplate.role);
       setDescription(
         sourceTemplate.description
           ? `${sourceTemplate.description} ${isEn ? '(Custom Clone)' : '(نسخه سفارشی‌شده)'}`
           : ''
       );
-      setDefaultCliMode(sourceTemplate.default_cli_mode);
+      setDefaultCliMode(sourceTemplate.default_cli_mode || 'GLOBAL_CONFIG');
       setCommands(sourceTemplate.commands);
       // Deep clone variables
       setVariables(

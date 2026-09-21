@@ -10,7 +10,7 @@
 
 ## 2. Git Workflow (Auto-Commit and Push)
 - **Auto-Commit and Push**: Whenever changes or updates are made to the codebase in response to user requests, automatically commit the changes with a clear, descriptive Persian/English commit message and push to the `master` branch on GitHub (`git push origin master`).
-- Remote origin is configured with user GitHub PAT on repository `shahbazimasoud/NetTopology`.
+- Remote origin is configured on repository `arkaadia/NetTop`.
 
 ## 3. UI/UX Standards
 - **Modal Backdrops**: All modals must use `.modal-backdrop-blur` with `data-modal-backdrop="true"` for a dark blurred glassmorphism backdrop.

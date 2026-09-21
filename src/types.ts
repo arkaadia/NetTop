@@ -231,8 +231,10 @@ export interface TopologyData {
 export interface VlanInfo {
   id: number;
   name: string;
-  subnet: string;
-  color: string;
+  subnet?: string;
+  color?: string;
+  status?: string;
+  ports_count?: number;
 }
 
 export type TemplateVendor = 'cisco' | 'mikrotik' | 'generic';
@@ -347,6 +349,7 @@ export interface LanScanDevice {
   ip: string;
   hostname: string;
   mac?: string;
+  vendor?: string;
   open_ports: number[];
   device_type: 'switch' | 'router' | 'host' | 'unknown';
   role: string;
@@ -360,7 +363,9 @@ export interface LanScanResult {
   subnet: string;
   total_scanned: number;
   alive_count: number;
+  found_devices_count?: number;
   scan_duration_sec: number;
+  scan_time_seconds?: number;
   devices: LanScanDevice[];
 }
 

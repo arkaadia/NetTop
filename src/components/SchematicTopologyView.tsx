@@ -302,7 +302,7 @@ export const SchematicTopologyView: React.FC<SchematicTopologyViewProps> = ({
 
   // Group links by pair of connected devices to separate overlapping cables
   const defaultLinkGroups = useMemo(() => {
-    const map = new Map<string, typeof topology.links>();
+    const map = new Map<string, TopologyLink[]>();
     if (!topology?.links) return map;
     for (const link of topology.links) {
       const pairKey = [link.source, link.target].sort().join('___');

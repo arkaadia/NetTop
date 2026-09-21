@@ -18,6 +18,7 @@ import { WindowsInstallerModal } from './components/WindowsInstallerModal';
 import { ModuleWorkflowModal } from './components/ModuleWorkflowModal';
 import { ComponentWorkflowModal } from './components/ComponentWorkflowModal';
 import { NetworkAutomationView } from './components/automation/NetworkAutomationView';
+import { RemoteDesktopView } from './components/remoteDesktop/RemoteDesktopView';
 import { useWorkflow } from './context/WorkflowContext';
 import { Workflow } from 'lucide-react';
 import { APP_VERSION } from './version';
@@ -37,7 +38,25 @@ import { useLanguage } from './i18n';
 
 export default function App() {
   const { t, isRtl, isEn } = useLanguage();
-  const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
+  const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
+    if (typeof window !== 'undefined' && window.location.pathname === '/remote-test') {
+      return 'remote-test';
+    }
+    return 'dashboard';
+  });
+
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = () => {
+      if (window.location.pathname === '/remote-test') {
+        setActiveTab('remote-test');
+      } else if (activeTab === 'remote-test') {
+        setActiveTab('dashboard');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [activeTab]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [topology, setTopology] = useState<TopologyData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -395,6 +414,10 @@ export default function App() {
             <div className="p-4 lg:p-6">
               <NetworkAutomationView devices={devices} />
             </div>
+          )}
+
+          {activeTab === 'remote-test' && (
+            <RemoteDesktopView />
           )}
         </main>
       </div>

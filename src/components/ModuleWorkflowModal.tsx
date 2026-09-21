@@ -21,7 +21,8 @@ import {
   Sparkles,
   Zap,
   Radio,
-  Sliders
+  Sliders,
+  Monitor
 } from 'lucide-react';
 import { useLanguage } from '../i18n';
 import { ActiveTab } from './Sidebar';
@@ -528,6 +529,52 @@ const MODULES_WORKFLOW: Record<ActiveTab, ModuleWorkflowData> = {
         apiMethod: 'POST',
         hardwareLayer: 'Live SSH Transport (port 22) to Target Network Appliance',
         targetToken: '[بخش: اتوماسیون شبکه | کامپوننت: src/components/automation/AutomationLifecycleModal.tsx | مرحله: اعمال SSH و تایید]',
+      },
+    ],
+  },
+  'remote-test': {
+    tabId: 'remote-test',
+    nameEn: 'Remote Test (Windows Remote Desktop / RDP)',
+    nameFa: 'تست ریموت و ارتباط زنده با ویندوز از طریق RDP',
+    subtitleEn: 'Browser-based Windows Remote Desktop powered by Apache Guacamole & guacd daemon',
+    subtitleFa: 'ریموت دسکتاپ مرورگری ویندوز مبتنی بر Apache Guacamole و پروکسی guacd',
+    icon: Monitor,
+    primaryComponent: 'RemoteDesktopView.tsx',
+    primaryFilePath: 'src/components/remoteDesktop/RemoteDesktopView.tsx',
+    colorScheme: {
+      accent: 'text-sky-400',
+      border: 'border-sky-500/40',
+      bg: 'bg-sky-500/10',
+      badge: 'bg-sky-500/20 text-sky-300 border-sky-500/30',
+    },
+    steps: [
+      {
+        id: 'rdp_inventory',
+        stepNumber: 1,
+        titleEn: 'Windows Remote Inventory & Diagnostic Test',
+        titleFa: 'مدیریت ماشین‌های ویندوز و تست زنده اتصال RDP',
+        descEn: 'Configure Windows hosts (IP, RDP port 3389, credentials) with live diagnostic probing and encrypted password vault.',
+        descFa: 'تنظیم ماشین‌های ویندوز با اعتبارسنجی زنده پورت RDP و رمزنگاری کلیدهای دسترسی در سرور.',
+        component: 'AddRemoteDeviceModal.tsx & RemoteDesktopView.tsx',
+        componentPath: 'src/components/remoteDesktop/AddRemoteDeviceModal.tsx',
+        apiEndpoint: '/api/remote-test/devices',
+        apiMethod: 'POST',
+        hardwareLayer: 'Windows Machine (TCP 3389 / RDP)',
+        targetToken: '[بخش: تست ریموت | کامپوننت: src/components/remoteDesktop/RemoteDesktopView.tsx | مرحله: مدیریت ماشین و تست اتصال]',
+      },
+      {
+        id: 'rdp_session',
+        stepNumber: 2,
+        titleEn: 'Interactive HTML5 Canvas RDP Session',
+        titleFa: 'سشن زنده و تعاملی ریموت دسکتاپ بر بستر Canvas',
+        descEn: 'Full mouse/keyboard/touch interaction, Ctrl+Alt+Del, Windows Key, and bidirectional clipboard sync via Guacamole WebSocket tunnel.',
+        descFa: 'ارسال ورودی‌های ماوس، کیبورد و کلیدهای ترکیبی به همراه انتقال کلیپ‌بورد از طریق تونل وب‌سوکت Guacamole.',
+        component: 'RemoteDesktopSessionView.tsx',
+        componentPath: 'src/components/remoteDesktop/RemoteDesktopSessionView.tsx',
+        apiEndpoint: '/ws/remote-desktop',
+        apiMethod: 'WS',
+        hardwareLayer: 'Apache Guacamole Daemon (guacd:4822) to Windows RDP (3389)',
+        targetToken: '[بخش: تست ریموت | کامپوننت: src/components/remoteDesktop/RemoteDesktopSessionView.tsx | مرحله: سشن زنده RDP]',
       },
     ],
   },
