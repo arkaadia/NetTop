@@ -70,6 +70,20 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
 - **سایدبار راهنمای هوشمند دستورات مرحله:** نمایش دستورات متناسب با مد جاری همراه با توضیحات فارسی، امکان درج دستور در خط فرمان با یک کلیک و اجرای آنی با دکمه اختصاصی.
 - **قابلیت‌های کاربردی CLI:** تاریخچه دستورات با کلیدهای جهت‌نما (Arrow Up/Down)، تکمیل خودکار با کلید Tab، و راهنمای دستور با علامت سوال (`?`).
 - **کنتراست فوق‌العاده و تمیز:** متن فیروزه‌ای، مکان‌نمای سبز زمردی و متن‌های لاگ سیستم بدون افتادگی رنگ در هر دو تم روشن و تاریک.
+- **ردیاب هوشمند لاگ اتصال و عیب‌یابی ۵ لایه‌ای SSH (Real SSH Connection Lifecycle & Multi-Layer Diagnostics):**
+  - **دکمه اختصاصی Connection Log در هدر ترمینال:** امکان باز و بسته کردن کشوی عیب‌یابی و پایش بلادرنگ لاگ برقراری اتصال SSH به همراه وضعیت زنده لایه‌ها.
+  - **اندپوینت عیب‌یابی عمیق `POST /api/terminal/exec`:** فراخوانی تست تشخیصی ۵ مرحله‌ای با تفکیک و ایزوله‌سازی دقیق مرحله خطا:
+    1. سوکت و دست‌تکانی TCP (پورت ۲۲)
+    2. تبادل نسخه پروتکل و بنر SSH سرور سیسکو
+    3. مذاکره الگوریتم‌های رمزنگاری (Ciphers) و تبادل کلید (KEX)
+    4. احراز هویت و اعتبارسنجی کاربر، رمز عبور و سطح دسترسی (Authentication)
+    5. تخصیص کانال شل تعاملی PTY و آماده‌سازی خط فرمان
+  - **نمایش برجسته محل وقوع خطا (Failure Spotlight):** در صورت بروز هرگونه قطعی یا عدم اتصال، لایه خطا، علت ریشه‌ای به زبان فارسی و انگلیسی، و فرامین مستقیم پیکربندی و رفع عیب سیسکو (`crypto key generate rsa`, `line vty 0 4`, `transport input ssh`, `login local`) همراه با دکمه کپی نمایش داده می‌شود.
+  - **تب‌های چندگانه در کشوی لاگ:**
+    - تب *مراحل ۵ گانه اتصال و بررسی لایه‌ای (5-Layer Lifecycle Stages)* با وضعیت زنده و تاخیر زمانی (Latency ms).
+    - تب *راهنمای عیب‌یابی و فرامین سیسکو (Troubleshooting & Cisco Commands)* با قطعه کدهای آماده کپی.
+    - تب *لاگ زنده و خام رویدادها (Real-Time Event Stream)* جهت مشاهده جزئیات جریان وب‌سوکت.
+  - **کپی کامل گزارش تشخیصی:** دکمه کپی جهت دریافت گزارش متنی منسجم شامل زمان، میزبان مقصد، وضعیت مراحل و لاگ زنده جهت ارائه به تیم پشتیبانی شبکه.
 
 ### ۴. مدیریت تغییرات ذخیره‌نشده و رایت در حافظه (NVRAM Write Memory)
 - **شناسایی تغییرات رایت‌نشده:** تشخیص عدم تطابق بین `running-config` و `startup-config` با نمایش بج هشدار زرد رنگ.
@@ -515,6 +529,17 @@ npm start
 - **Stage-Aware Command Helper Sidebar:** Dynamically presents valid commands for the active prompt mode with explanatory descriptions, one-click insertion, and direct execution buttons.
 - **CLI Usability Enhancements:** Tab completion, history navigation via Up/Down arrow keys, and standard Cisco `?` help querying.
 - **High-Contrast Terminal Palette:** Cyan input font, emerald blinking cursor, and legible slate system text engineered to prevent low-contrast washout in light mode.
+- **Real SSH Connection Lifecycle & 5-Layer Diagnostic Inspector:**
+  - **Dedicated "Connection Log" Header Button:** Quick access drawer within `RealSshTerminalModal.tsx` for real-time connection flow analysis and root-cause debugging.
+  - **Deep Non-Destructive Probe Endpoint (`POST /api/terminal/exec`):** Traces and verifies each layer independently:
+    1. Layer 4 TCP Socket handshake on port 22
+    2. Cisco SSH identification banner exchange (`SSH-2.0-Cisco`)
+    3. Diffie-Hellman Key Exchange (KEX) and cipher negotiation
+    4. AAA / User credential authentication & privilege elevation
+    5. PTY shell channel allocation & interactive CLI readiness
+  - **Pinpointed Failure Isolation & Remediation:** Accurately isolates exact failure stages with detailed root-cause descriptions and actionable Cisco CLI fixes (`crypto key generate rsa modulus 2048`, `transport input ssh`, `login local`).
+  - **Multi-Tab Diagnostic View:** Structured tabs for *5-Layer Lifecycle Stages*, *Troubleshooting & Cisco Commands*, and *Real-Time WebSocket Event Stream*.
+  - **One-Click Diagnostic Report Export:** Formatted clipboard report copy for rapid incident escalation and network operations team review.
 
 ### 4. Unsaved Configuration Detection & NVRAM Write
 - **Startup vs. Running-Config Tracking:** Detects unsaved volatile memory changes and triggers warning badges.

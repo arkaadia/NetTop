@@ -89,6 +89,48 @@ export interface RealTelnetTestResult {
   port: number;
 }
 
+export interface TerminalExecParams {
+  host: string;
+  port?: number;
+  username: string;
+  password?: string;
+  enablePassword?: string;
+  command?: string;
+  timeoutMs?: number;
+}
+
+export interface TerminalDiagnosticStage {
+  id: string;
+  name: string;
+  nameFa: string;
+  status: 'success' | 'failed' | 'warning' | 'skipped' | 'in_progress';
+  latency_ms?: number;
+  details: string;
+  detailsFa: string;
+  rawError?: string;
+  errorFixFa?: string;
+  errorFixEn?: string;
+}
+
+export interface TerminalExecResult {
+  success: boolean;
+  message: string;
+  messageFa?: string;
+  latency_ms: number;
+  stages: TerminalDiagnosticStage[];
+  failureStage?: string;
+  failureLayer?: string;
+  rootCause?: string;
+  rootCauseFa?: string;
+  recommendation?: string;
+  recommendationFa?: string;
+  banner?: string;
+  cipher?: string;
+  kex?: string;
+  commandOutput?: string;
+  timestamp: string;
+}
+
 export interface RealSwitchDiscoveryResult {
   success: boolean;
   message: string;

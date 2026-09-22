@@ -11,7 +11,9 @@ import {
   TemplateApplyResult,
   DeviceConfigExtractRequest,
   DeviceConfigExtractResult,
-  DeviceConnectionTestResult
+  DeviceConnectionTestResult,
+  TerminalExecParams,
+  TerminalExecResult
 } from '../types';
 
 const API_BASE = '/api';
@@ -522,6 +524,23 @@ export async function importScannedDevice(
   if (!res.ok) throw new Error('Failed to import scanned device');
   return res.json();
 }
+
+/**
+ * Execute deep terminal diagnostics and probe connection flow
+ * Calls POST /api/terminal/exec
+ */
+export async function executeTerminalDiagnostics(
+  params: TerminalExecParams
+): Promise<TerminalExecResult> {
+  const res = await fetch(`${API_BASE}/terminal/exec`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  const data = await res.json();
+  return data;
+}
+
 
 
 

@@ -30,14 +30,22 @@ import {
   Key,
   RefreshCw,
   Eye,
-  EyeOff
+  EyeOff,
+  Activity,
+  FileText,
+  Copy,
+  Check,
+  HelpCircle,
+  Info,
+  ListOrdered,
+  AlertTriangle
 } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 import { parseAnsiToSpans } from '../utils/ansi';
 import { DangerousCommandModal } from './DangerousCommandModal';
-import { updateDevice, fetchDevicePorts, fetchVlans } from '../services/api';
-import { Device, SwitchPort, VlanInfo } from '../types';
+import { updateDevice, fetchDevicePorts, fetchVlans, executeTerminalDiagnostics } from '../services/api';
+import { Device, SwitchPort, VlanInfo, TerminalExecResult, TerminalDiagnosticStage } from '../types';
 
 interface RealSshTerminalModalProps {
   isOpen: boolean;
@@ -159,6 +167,25 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
   const [guideSearch, setGuideSearch] = useState('');
   const [guideCategory, setGuideCategory] = useState<'all' | 'show' | 'config' | 'exec' | 'vlan'>('all');
 
+  // Connection Log & Diagnostics State
+  const [showLogDrawer, setShowLogDrawer] = useState<boolean>(false);
+  const [connectionLogs, setConnectionLogs] = useState<{
+    id: string;
+    timestamp: string;
+    type: 'info' | 'status' | 'error' | 'success' | 'warn';
+    stage?: string;
+    stageNameFa?: string;
+    message: string;
+    messageFa?: string;
+    details?: string;
+    failureLayer?: string;
+    recommendationFa?: string;
+  }[]>([]);
+  const [diagnosticsResult, setDiagnosticsResult] = useState<TerminalExecResult | null>(null);
+  const [isDiagnosing, setIsDiagnosing] = useState<boolean>(false);
+  const [activeLogTab, setActiveLogTab] = useState<'flow' | 'solution' | 'raw'>('flow');
+  const [copiedLog, setCopiedLog] = useState<boolean>(false);
+
   // Dangerous Command Modal
   const [pendingDangerousCmd, setPendingDangerousCmd] = useState<string | null>(null);
   const [dangerousReason, setDangerousReason] = useState<string>('');
@@ -194,6 +221,10 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
       setHasPagingPrompt(false);
       setTerminalEngine('real_ssh');
       setShowCredsDrawer(false);
+      setShowLogDrawer(false);
+      setConnectionLogs([]);
+      setDiagnosticsResult(null);
+      setIsDiagnosing(false);
       setSaveCredsMessage(null);
 
       // Load ports/vlans for simulation fallback if needed
@@ -275,6 +306,19 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
       `\r\n[SSH] Connecting to ${targetHost}:${targetPort} using user '${targetUsername}'...\r\n`
     );
 
+    const initTime = new Date().toLocaleTimeString('fa-IR');
+    setConnectionLogs([
+      {
+        id: String(Date.now()),
+        timestamp: initTime,
+        type: 'info',
+        stage: 'tcp_socket',
+        stageNameFa: 'برقراری سوکت TCP',
+        message: `Connecting to ${targetUsername}@${targetHost}:${targetPort}...`,
+        messageFa: `درخواست اتصال سوکت به ${targetHost}:${targetPort} با کاربر '${targetUsername}'`
+      }
+    ]);
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws/ssh`;
 
@@ -283,6 +327,19 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
       wsRef.current = ws;
 
       ws.onopen = () => {
+        setConnectionLogs((prev) => [
+          ...prev,
+          {
+            id: String(Date.now()) + Math.random(),
+            timestamp: new Date().toLocaleTimeString('fa-IR'),
+            type: 'info',
+            stage: 'websocket',
+            stageNameFa: 'کانال ارتباطی وب‌سوکت',
+            message: 'WebSocket tunnel established to server /ws/ssh. Sent handshake payload.',
+            messageFa: 'کانال وب‌سوکت با سرور فعال شد و بسته Handshake ارسال گردید.'
+          }
+        ]);
+
         // Send initial connect payload
         ws.send(
           JSON.stringify({
@@ -320,6 +377,18 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
                   ? `Connected to ${targetHost} (Port ${targetPort})`
                   : `اتصال فعال به ${targetHost} (پورت ${targetPort})`
               );
+              setConnectionLogs((prev) => [
+                ...prev,
+                {
+                  id: String(Date.now()) + Math.random(),
+                  timestamp: new Date().toLocaleTimeString('fa-IR'),
+                  type: 'success',
+                  stage: 'pty_exec',
+                  stageNameFa: 'ترمینال تعاملی PTY',
+                  message: `Interactive shell ready for ${targetUsername}@${targetHost}`,
+                  messageFa: `کانال PTY متصل شد و خط فرمان آماده دریافت دستورات است.`
+                }
+              ]);
               // Automatically disable pagination if toggled
               if (autoDisablePaging) {
                 setTimeout(() => {
@@ -331,20 +400,131 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
               setStatusMessage(
                 isEn ? 'Authenticated! Establishing PTY...' : 'احراز هویت تایید شد! در حال راه‌اندازی PTY...'
               );
+              setConnectionLogs((prev) => [
+                ...prev,
+                {
+                  id: String(Date.now()) + Math.random(),
+                  timestamp: new Date().toLocaleTimeString('fa-IR'),
+                  type: 'success',
+                  stage: 'auth',
+                  stageNameFa: 'احراز هویت کاربر',
+                  message: `User '${targetUsername}' credentials accepted by Cisco switch.`,
+                  messageFa: `احراز هویت کاربر '${targetUsername}' تایید شد.`
+                }
+              ]);
             } else if (msg.status === 'closed' || msg.status === 'disconnected') {
               setConnectionStatus('disconnected');
               setStatusMessage(msg.message || (isEn ? 'Connection closed' : 'ارتباط قطع شد'));
+              setConnectionLogs((prev) => [
+                ...prev,
+                {
+                  id: String(Date.now()) + Math.random(),
+                  timestamp: new Date().toLocaleTimeString('fa-IR'),
+                  type: 'warn',
+                  stage: 'disconnect',
+                  stageNameFa: 'قطع اتصال',
+                  message: msg.message || 'Connection closed',
+                  messageFa: 'اتصال توسط سرور یا کاربر بسته شد.'
+                }
+              ]);
             }
           } else if (msg.type === 'banner') {
             setBanner(msg.banner);
+            setConnectionLogs((prev) => [
+              ...prev,
+              {
+                id: String(Date.now()) + Math.random(),
+                timestamp: new Date().toLocaleTimeString('fa-IR'),
+                type: 'info',
+                stage: 'ssh_banner',
+                stageNameFa: 'بنر شناسایی SSH',
+                message: `Banner: ${msg.banner}`,
+                messageFa: `دریافت بنر و شناسه سرور SSH: ${msg.banner.slice(0, 100)}`
+              }
+            ]);
           } else if (msg.type === 'error') {
             setConnectionStatus('error');
             setStatusMessage(msg.message || (isEn ? 'SSH connection error' : 'خطای اتصال SSH'));
             setTerminalOutput(
               (prev) =>
-                `${prev}\r\n\x1b[31m[SSH ERROR] ${msg.message}\x1b[0m\r\n\x1b[33mHint: Verify device reachability or check credentials. If on local network, run './run-local-ssh.sh'. You can also switch to Simulator Mode.\x1b[0m\r\n`
+                `${prev}\r\n\x1b[31m[SSH ERROR] ${msg.message}\x1b[0m\r\n\x1b[33mHint: Click 'لاگ اتصال' for 5-layer diagnostic inspection & Cisco remediation.\x1b[0m\r\n`
             );
             setShowCredsDrawer(true);
+
+            setConnectionLogs((prev) => [
+              ...prev,
+              {
+                id: String(Date.now()) + Math.random(),
+                timestamp: new Date().toLocaleTimeString('fa-IR'),
+                type: 'error',
+                stage: msg.failureStage || 'ssh_connection',
+                stageNameFa: msg.failureLayer || 'خطای اتصال SSH',
+                message: msg.message || 'SSH error',
+                messageFa: msg.rootCauseFa || msg.message || 'خطا در ارتباط با سوئیچ',
+                failureLayer: msg.failureLayer,
+                recommendationFa: msg.recommendationFa
+              }
+            ]);
+
+            // Construct synthetic diagnostic result if not yet executed via API
+            setDiagnosticsResult((prev) => {
+              if (prev && prev.failureStage) return prev;
+              const fStage = msg.failureStage || 'tcp_socket';
+              return {
+                success: false,
+                message: msg.message || 'SSH connection error',
+                messageFa: msg.rootCauseFa || msg.message,
+                latency_ms: 0,
+                stages: [
+                  {
+                    id: 'tcp_socket',
+                    name: 'TCP Socket (Port 22)',
+                    nameFa: 'سوکت و دست‌تکانی TCP (لایه ۴)',
+                    status: fStage === 'tcp_socket' ? 'failed' : 'success',
+                    details: fStage === 'tcp_socket' ? msg.message : 'Connected',
+                    detailsFa: fStage === 'tcp_socket' ? (msg.rootCauseFa || msg.message) : 'سوکت TCP در دسترس است'
+                  },
+                  {
+                    id: 'ssh_banner',
+                    name: 'SSH Identification',
+                    nameFa: 'تبادل پروتکل و بنر SSH',
+                    status: fStage === 'ssh_banner' ? 'failed' : fStage === 'tcp_socket' ? 'skipped' : 'success',
+                    details: 'Protocol identification',
+                    detailsFa: 'تبادل نسخه پروتکل'
+                  },
+                  {
+                    id: 'kex_cipher',
+                    name: 'Key Exchange & Ciphers',
+                    nameFa: 'مذاکره الگوریتم‌های رمزنگاری و KEX',
+                    status: fStage === 'kex_cipher' ? 'failed' : (fStage === 'tcp_socket' || fStage === 'ssh_banner') ? 'skipped' : 'success',
+                    details: 'Ciphers negotiation',
+                    detailsFa: 'توافق الگوریتم‌ها'
+                  },
+                  {
+                    id: 'auth',
+                    name: 'Authentication',
+                    nameFa: 'احراز هویت کاربر و سطح دسترسی',
+                    status: fStage === 'auth' ? 'failed' : (fStage ? 'skipped' : 'success'),
+                    details: 'User credentials verification',
+                    detailsFa: fStage === 'auth' ? (msg.rootCauseFa || 'نام کاربری یا کلمه عبور رد شد') : 'احراز هویت'
+                  },
+                  {
+                    id: 'pty_exec',
+                    name: 'PTY Shell',
+                    nameFa: 'تخصیص شل تعاملی PTY',
+                    status: fStage ? 'skipped' : 'success',
+                    details: 'Interactive terminal channel',
+                    detailsFa: 'کانال ترمینال'
+                  }
+                ],
+                failureStage: fStage,
+                failureLayer: msg.failureLayer || 'لایه ارتباطی',
+                rootCause: msg.message,
+                rootCauseFa: msg.rootCauseFa || msg.message,
+                recommendationFa: msg.recommendationFa,
+                timestamp: new Date().toISOString()
+              };
+            });
           }
         } catch {
           // If raw text
@@ -359,11 +539,117 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
       ws.onerror = () => {
         setConnectionStatus('error');
         setStatusMessage(isEn ? 'WebSocket communication error' : 'خطا در وب‌سوکت ارتباطی');
+        setConnectionLogs((prev) => [
+          ...prev,
+          {
+            id: String(Date.now()) + Math.random(),
+            timestamp: new Date().toLocaleTimeString('fa-IR'),
+            type: 'error',
+            stage: 'websocket',
+            stageNameFa: 'کانال ارتباطی وب‌سوکت',
+            message: 'WebSocket connection failed',
+            messageFa: 'خطا در اتصال به وب‌سوکت سرور برنامه.'
+          }
+        ]);
       };
     } catch (e: any) {
       setConnectionStatus('error');
       setStatusMessage(e.message);
     }
+  };
+
+  // Execute Deep Connection Diagnostics via POST /api/terminal/exec
+  const handleRunDiagnostics = async (customCommand?: string) => {
+    setIsDiagnosing(true);
+    const targetHost = host.trim();
+    const targetPort = Number(port) || 22;
+    const targetUsername = username.trim();
+
+    try {
+      const res = await executeTerminalDiagnostics({
+        host: targetHost,
+        port: targetPort,
+        username: targetUsername,
+        password: password || '',
+        enablePassword: enablePassword || '',
+        command: customCommand || '',
+        timeoutMs: 12000
+      });
+
+      setDiagnosticsResult(res);
+
+      const timestamp = new Date().toLocaleTimeString('fa-IR');
+      setConnectionLogs((prev) => [
+        ...prev,
+        {
+          id: String(Date.now()),
+          timestamp,
+          type: res.success ? 'success' : 'error',
+          stage: res.failureStage || 'diagnostics',
+          stageNameFa: res.failureLayer || (res.success ? 'بررسی عمیق ۵ لایه' : 'تشخیص نقطه خطا'),
+          message: res.message,
+          messageFa: res.messageFa || res.message,
+          failureLayer: res.failureLayer,
+          recommendationFa: res.recommendationFa
+        }
+      ]);
+
+      if (!res.success && res.failureStage) {
+        setActiveLogTab('flow');
+      }
+    } catch (err: any) {
+      console.error('Diagnostic error:', err);
+      const timestamp = new Date().toLocaleTimeString('fa-IR');
+      setConnectionLogs((prev) => [
+        ...prev,
+        {
+          id: String(Date.now()),
+          timestamp,
+          type: 'error',
+          stage: 'api_error',
+          stageNameFa: 'خطای وب‌سرویس عیب‌یابی',
+          message: err.message || 'Diagnostic API failed',
+          messageFa: 'خطا در ارتباط با سرویس /api/terminal/exec'
+        }
+      ]);
+    } finally {
+      setIsDiagnosing(false);
+    }
+  };
+
+  // Copy Full Diagnostics & Connection Log
+  const handleCopyDiagnostics = () => {
+    let report = `=== گزارش و لاگ مراحل اتصال SSH (Cisco Switch Connection Log & Diagnostics) ===\n`;
+    report += `زمان بررسی: ${new Date().toLocaleString('fa-IR')}\n`;
+    report += `میزبان مقصد: ${username}@${host}:${port}\n`;
+    report += `وضعیت کلی: ${diagnosticsResult ? (diagnosticsResult.success ? 'موفقیت‌آمیز (هر ۵ مرحله تایید شد)' : 'خطا در برقراری ارتباط') : connectionStatus}\n`;
+    if (diagnosticsResult?.latency_ms) {
+      report += `تاخیر کلی اتصال: ${diagnosticsResult.latency_ms}ms\n`;
+    }
+    if (diagnosticsResult?.failureStage) {
+      report += `\n[موقعیت وقوع خطا]: ${diagnosticsResult.failureStage} (${diagnosticsResult.failureLayer || ''})\n`;
+      report += `[علت ریشه‌ای خطا]: ${diagnosticsResult.rootCauseFa || diagnosticsResult.rootCause || diagnosticsResult.message}\n`;
+      if (diagnosticsResult.recommendationFa) {
+        report += `[راهکار رفع در سوئیچ سیسکو]: ${diagnosticsResult.recommendationFa}\n`;
+      }
+    }
+    report += `\n--- مراحل ۵ گانه دست‌تکانی و اتصال (Layered Stages) ---\n`;
+    if (diagnosticsResult?.stages) {
+      diagnosticsResult.stages.forEach((st, idx) => {
+        report += `${idx + 1}. [${st.status.toUpperCase()}] ${st.nameFa} (${st.name}) - ${st.latency_ms ? st.latency_ms + 'ms' : '-'}\n`;
+        report += `   توضیحات: ${st.detailsFa || st.details}\n`;
+        if (st.rawError) report += `   خطای خام: ${st.rawError}\n`;
+        if (st.errorFixFa) report += `   دستور پیشنهادی: ${st.errorFixFa}\n`;
+      });
+    }
+    report += `\n--- لاگ رویدادهای زنده (WebSocket Event Stream) ---\n`;
+    connectionLogs.forEach((l) => {
+      report += `[${l.timestamp}] [${l.type.toUpperCase()}] ${l.stageNameFa || l.stage || ''}: ${l.messageFa || l.message}\n`;
+    });
+
+    navigator.clipboard.writeText(report);
+    setCopiedLog(true);
+    setTimeout(() => setCopiedLog(false), 2000);
   };
 
   // Save Credentials permanently to Device
@@ -683,6 +969,35 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
                 <span className="hidden sm:inline">{isEn ? 'Command Guide' : 'راهنمای دستورات'}</span>
               </button>
 
+              {/* Connection Log & Diagnostic Inspector Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  const nextState = !showLogDrawer;
+                  setShowLogDrawer(nextState);
+                  if (nextState && !diagnosticsResult && !isDiagnosing) {
+                    handleRunDiagnostics();
+                  }
+                }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition cursor-pointer flex items-center gap-1.5 ${
+                  showLogDrawer
+                    ? 'bg-amber-600 text-white border-amber-500 shadow-md'
+                    : connectionStatus === 'error' || (diagnosticsResult && !diagnosticsResult.success)
+                    ? 'bg-rose-500/25 hover:bg-rose-500/35 text-rose-200 border-rose-500/50 animate-pulse'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                }`}
+                title={isEn ? 'Connection Log & Diagnostics (POST /api/terminal/exec)' : 'لاگ اتصال و عیب‌یابی لایه‌ای (POST /api/terminal/exec)'}
+              >
+                <Activity className={`w-3.5 h-3.5 ${isDiagnosing ? 'animate-spin text-amber-300' : 'text-amber-400'}`} />
+                <span className="font-semibold">{isEn ? 'Connection Log' : 'لاگ اتصال'}</span>
+                {diagnosticsResult && !diagnosticsResult.success && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                )}
+                {diagnosticsResult && diagnosticsResult.success && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                )}
+              </button>
+
               {/* Engine Switcher */}
               {terminalEngine === 'real_ssh' ? (
                 connectionStatus === 'ready' ? (
@@ -748,6 +1063,424 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Connection Log & Multi-Layer Diagnostics Drawer */}
+          {showLogDrawer && (
+            <div className="bg-slate-900 border-b border-amber-500/30 px-4 py-3 text-xs shadow-xl">
+              {/* Drawer Top Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-800">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    <Activity className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-100 text-sm">
+                        {isEn ? 'SSH Connection Lifecycle & Diagnostics' : 'لاگ و آنالیز مراحل اتصال SSH'}
+                      </span>
+                      {/* Overall Status Badge */}
+                      {diagnosticsResult?.success ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                          <span>{isEn ? 'All 5 Stages Verified' : 'موفق (۵ لایه تایید شد)'}</span>
+                          {diagnosticsResult.latency_ms > 0 && <span>· {diagnosticsResult.latency_ms}ms</span>}
+                        </span>
+                      ) : diagnosticsResult?.failureStage ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 text-rose-400" />
+                          <span>{isEn ? `Failed at ${diagnosticsResult.failureStage}` : `خطا در مرحله ${diagnosticsResult.failureStage}`}</span>
+                        </span>
+                      ) : isDiagnosing ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+                          <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
+                          <span>{isEn ? 'Probing layers...' : 'در حال آزمودن لایه‌ها...'}</span>
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-800 text-slate-300 border border-slate-700">
+                          {isEn ? 'Idle' : 'آماده بررسی'}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      {isEn
+                        ? `Real-time handshake tracer for ${username}@${host}:${port} with root-cause isolation`
+                        : `ردیابی لحظه‌ای نحوه برقراری ارتباط با ${username}@${host}:${port} و تشخیص دقیق محل اشکال`}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleRunDiagnostics()}
+                    disabled={isDiagnosing}
+                    className="px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-500 text-white font-medium text-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
+                    title={isEn ? 'Run Deep 5-Layer Probe via POST /api/terminal/exec' : 'اجرای تست عمیق ۵ لایه از طریق POST /api/terminal/exec'}
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isDiagnosing ? 'animate-spin' : ''}`} />
+                    <span>{isDiagnosing ? (isEn ? 'Testing...' : 'در حال تست...') : (isEn ? 'Probe Connection (API)' : 'تست مجدد اتصال (اندپوینت)')}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCopyDiagnostics}
+                    className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium text-xs transition flex items-center gap-1.5 cursor-pointer"
+                    title={isEn ? 'Copy full diagnostic log to clipboard' : 'کپی گزارش کامل لاگ و عیب‌یابی'}
+                  >
+                    {copiedLog ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-slate-400" />}
+                    <span>{copiedLog ? (isEn ? 'Copied!' : 'کپی شد!') : (isEn ? 'Copy Log' : 'کپی لاگ')}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowLogDrawer(false)}
+                    className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Prominent Root Cause / Failure Spotlight Banner */}
+              {diagnosticsResult && !diagnosticsResult.success && (
+                <div className="mt-2.5 p-3 rounded-lg bg-rose-950/60 border border-rose-600/40 text-rose-200 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-bold text-xs text-rose-100 flex items-center gap-1.5 flex-wrap">
+                          <span>{isEn ? 'Failure Location Identified:' : 'موقعیت دقیق وقوع خطا:'}</span>
+                          <span className="px-2 py-0.5 rounded bg-rose-900/80 text-rose-200 font-mono text-[11px] border border-rose-700/50">
+                            {diagnosticsResult.failureStage}
+                          </span>
+                          {diagnosticsResult.failureLayer && (
+                            <span className="text-[11px] text-rose-300/80">({diagnosticsResult.failureLayer})</span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-rose-200/90 mt-1 leading-relaxed">
+                          <strong>{isEn ? 'Root Cause: ' : 'علت ریشه‌ای: '}</strong>
+                          {diagnosticsResult.rootCauseFa || diagnosticsResult.rootCause || diagnosticsResult.message}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveLogTab('solution')}
+                      className="px-2 py-1 rounded bg-rose-900/60 hover:bg-rose-850 text-rose-100 text-[11px] font-semibold border border-rose-700/60 shrink-0 cursor-pointer transition flex items-center gap-1"
+                    >
+                      <HelpCircle className="w-3 h-3 text-rose-300" />
+                      <span>{isEn ? 'View Fix Guide' : 'مشاهده راهکار'}</span>
+                    </button>
+                  </div>
+
+                  {diagnosticsResult.recommendationFa && (
+                    <div className="pt-2 border-t border-rose-900/60 text-[11px] text-rose-100 flex items-start gap-1.5 bg-rose-950/40 p-2 rounded">
+                      <span className="font-semibold shrink-0 text-amber-300">💡 {isEn ? 'Fix Recommendation:' : 'راهکار پیشنهادی:'}</span>
+                      <span className="leading-relaxed">{diagnosticsResult.recommendationFa}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Success Banner */}
+              {diagnosticsResult && diagnosticsResult.success && (
+                <div className="mt-2.5 p-2.5 rounded-lg bg-emerald-950/50 border border-emerald-500/30 text-emerald-200 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>
+                      {isEn
+                        ? `Full 5-layer SSH connectivity confirmed (${diagnosticsResult.latency_ms}ms). Socket, KEX, Authentication, and PTY are completely healthy.`
+                        : `ارتباط لایه‌ای به صورت کامل تایید شد (${diagnosticsResult.latency_ms}ms). سوکت شبکه، تبادل کلید، احراز هویت و شل PTY کاملاً سالم و فعال هستند.`}
+                    </span>
+                  </div>
+                  {diagnosticsResult.banner && (
+                    <span className="text-[10px] font-mono text-emerald-300/80 truncate max-w-xs px-2 py-0.5 rounded bg-emerald-900/40">
+                      {diagnosticsResult.banner}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Navigation Tabs */}
+              <div className="flex items-center gap-2 mt-2.5 border-b border-slate-800 pb-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveLogTab('flow')}
+                  className={`px-3 py-1 rounded-t text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 border-b-2 ${
+                    activeLogTab === 'flow'
+                      ? 'border-amber-500 text-amber-400 bg-slate-800/60'
+                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <ListOrdered className="w-3.5 h-3.5" />
+                  <span>{isEn ? '5-Layer Lifecycle Stages' : 'مراحل ۵ گانه اتصال و بررسی لایه‌ای'}</span>
+                  {diagnosticsResult?.stages && (
+                    <span className="text-[10px] px-1.5 rounded-full bg-slate-800 text-slate-300">
+                      {diagnosticsResult.stages.length}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveLogTab('solution')}
+                  className={`px-3 py-1 rounded-t text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 border-b-2 ${
+                    activeLogTab === 'solution'
+                      ? 'border-indigo-500 text-indigo-400 bg-slate-800/60'
+                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <HelpCircle className="w-3.5 h-3.5" />
+                  <span>{isEn ? 'Troubleshooting & Cisco Commands' : 'راهنمای عیب‌یابی و دستورات سوئیچ'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveLogTab('raw')}
+                  className={`px-3 py-1 rounded-t text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 border-b-2 ${
+                    activeLogTab === 'raw'
+                      ? 'border-cyan-500 text-cyan-400 bg-slate-800/60'
+                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>{isEn ? 'Real-Time Event Stream' : 'لاگ زنده و خام رویدادها'}</span>
+                  {connectionLogs.length > 0 && (
+                    <span className="text-[10px] px-1.5 rounded-full bg-slate-800 text-slate-300">
+                      {connectionLogs.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {/* Tab Content 1: 5-Layer Lifecycle Stages */}
+              {activeLogTab === 'flow' && (
+                <div className="mt-2.5 grid grid-cols-1 md:grid-cols-5 gap-2">
+                  {(diagnosticsResult?.stages || [
+                    {
+                      id: 'tcp_socket',
+                      name: 'TCP Socket (Port 22)',
+                      nameFa: 'سوکت و دست‌تکانی TCP',
+                      status: connectionStatus === 'ready' || connectionStatus === 'authenticated' ? 'success' : connectionStatus === 'connecting' ? 'in_progress' : connectionStatus === 'error' ? 'failed' : 'idle',
+                      details: 'TCP 3-way handshake on target port',
+                      detailsFa: 'بررسی باز بودن پورت و برقراری ارتباط ترنسپورت لایه ۴'
+                    },
+                    {
+                      id: 'ssh_banner',
+                      name: 'SSH Identification',
+                      nameFa: 'تبادل نسخه و بنر SSH',
+                      status: banner ? 'success' : connectionStatus === 'ready' ? 'success' : 'idle',
+                      details: 'Server identification banner exchange',
+                      detailsFa: 'دریافت نسخه سرور SSH سیسکو (SSH-2.0-Cisco)'
+                    },
+                    {
+                      id: 'kex_cipher',
+                      name: 'Key Exchange & Ciphers',
+                      nameFa: 'مذاکره رمزنگاری و KEX',
+                      status: connectionStatus === 'ready' || connectionStatus === 'authenticated' ? 'success' : 'idle',
+                      details: 'Diffie-Hellman KEX and Cipher agreement',
+                      detailsFa: 'توافق بر سر الگوریتم‌های امنیتی و تبادل کلید'
+                    },
+                    {
+                      id: 'auth',
+                      name: 'Authentication',
+                      nameFa: 'احراز هویت کاربر (AAA)',
+                      status: connectionStatus === 'ready' || connectionStatus === 'authenticated' ? 'success' : 'idle',
+                      details: 'Credentials verification & privilege level',
+                      detailsFa: 'اعتبارسنجی نام کاربری، رمز عبور و سطح دسترسی'
+                    },
+                    {
+                      id: 'pty_exec',
+                      name: 'PTY Shell Channel',
+                      nameFa: 'تخصیص شل تعاملی PTY',
+                      status: connectionStatus === 'ready' ? 'success' : 'idle',
+                      details: 'Pseudo-terminal channel ready for CLI commands',
+                      detailsFa: 'راه‌اندازی خط فرمان تعاملی و ارسال دستورات'
+                    }
+                  ]).map((st: any, idx: number) => {
+                    const isSuccess = st.status === 'success';
+                    const isFailed = st.status === 'failed';
+                    const isInProgress = st.status === 'in_progress';
+
+                    return (
+                      <div
+                        key={st.id || idx}
+                        className={`p-2.5 rounded-lg border flex flex-col justify-between transition ${
+                          isFailed
+                            ? 'bg-rose-950/40 border-rose-600/50 text-rose-200'
+                            : isSuccess
+                            ? 'bg-slate-950/60 border-emerald-600/30 text-slate-200'
+                            : isInProgress
+                            ? 'bg-amber-950/30 border-amber-600/40 text-amber-200'
+                            : 'bg-slate-950/40 border-slate-800 text-slate-400'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between gap-1 mb-1">
+                            <span className="font-bold text-[11px] flex items-center gap-1">
+                              <span className="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[10px] text-slate-300 font-mono">
+                                {idx + 1}
+                              </span>
+                              <span className={isFailed ? 'text-rose-200' : isSuccess ? 'text-slate-100' : 'text-slate-300'}>
+                                {st.nameFa || st.name}
+                              </span>
+                            </span>
+
+                            {isSuccess && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                            {isFailed && <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />}
+                            {isInProgress && <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin shrink-0" />}
+                          </div>
+
+                          <div className="text-[10px] text-slate-400 leading-snug line-clamp-2">
+                            {st.detailsFa || st.details}
+                          </div>
+
+                          {st.latency_ms !== undefined && st.latency_ms > 0 && (
+                            <div className="text-[10px] text-emerald-400 font-mono mt-1">
+                              {st.latency_ms} ms
+                            </div>
+                          )}
+
+                          {isFailed && st.rawError && (
+                            <div className="mt-1.5 p-1 rounded bg-rose-950/80 border border-rose-800/40 text-rose-200 text-[10px] font-mono break-all">
+                              {st.rawError}
+                            </div>
+                          )}
+                        </div>
+
+                        {isFailed && st.errorFixFa && (
+                          <div className="mt-2 pt-1 border-t border-rose-900/50 text-[10px] text-amber-300/90 leading-tight">
+                            💡 {st.errorFixFa}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Tab Content 2: Cisco Troubleshooting & Commands */}
+              {activeLogTab === 'solution' && (
+                <div className="mt-2.5 p-3 rounded-lg bg-slate-950/80 border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
+                      <HelpCircle className="w-4 h-4 text-indigo-400" />
+                      <span>{isEn ? 'Cisco IOS Configuration Checklist for SSH' : 'چک‌لیست و فرامین حل مشکل SSH در سوئیچ سیسکو'}</span>
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      {isEn ? 'Copy & paste directly into Cisco CLI console' : 'فرامین زیر را در خط فرمان کنسول سوئیچ وارد کنید'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
+                    {/* Block 1: Transport & RSA Key */}
+                    <div className="p-2.5 rounded bg-slate-900 border border-slate-800 space-y-1.5">
+                      <span className="font-semibold text-amber-300 block">
+                        ۱. فعال‌سازی SSH و تولید کلید RSA (حل خطای بسته بودن پورت یا کلید)
+                      </span>
+                      <pre className="p-2 rounded bg-slate-950 text-emerald-300 font-mono text-[10px] leading-relaxed overflow-x-auto select-all border border-slate-800">
+{`configure terminal
+ip domain-name mynetwork.local
+crypto key generate rsa modulus 2048
+ip ssh version 2
+ip ssh time-out 60
+ip ssh authentication-retries 3
+end`}
+                      </pre>
+                    </div>
+
+                    {/* Block 2: VTY Lines & Local Auth */}
+                    <div className="p-2.5 rounded bg-slate-900 border border-slate-800 space-y-1.5">
+                      <span className="font-semibold text-cyan-300 block">
+                        ۲. تعریف کاربر و باز کردن پروتکل در خطوط VTY (حل خطای احراز هویت)
+                      </span>
+                      <pre className="p-2 rounded bg-slate-950 text-cyan-300 font-mono text-[10px] leading-relaxed overflow-x-auto select-all border border-slate-800">
+{`configure terminal
+username ${username || 'admin'} privilege 15 secret ${password || 'cisco123'}
+line vty 0 4
+ transport input ssh
+ login local
+ exit
+line vty 5 15
+ transport input ssh
+ login local
+end
+write memory`}
+                      </pre>
+                    </div>
+
+                    {/* Block 3: Interface & IP Reachability */}
+                    <div className="p-2.5 rounded bg-slate-900 border border-slate-800 space-y-1.5">
+                      <span className="font-semibold text-emerald-300 block">
+                        ۳. بررسی وضعیت اینترفیس مدیریت و آدرس IP سوئیچ
+                      </span>
+                      <pre className="p-2 rounded bg-slate-950 text-slate-300 font-mono text-[10px] leading-relaxed overflow-x-auto select-all border border-slate-800">
+{`show ip interface brief | include up
+show ip ssh
+show interfaces status
+show run | section line vty`}
+                      </pre>
+                    </div>
+
+                    {/* Block 4: Local Bridge Mode */}
+                    <div className="p-2.5 rounded bg-slate-900 border border-slate-800 space-y-1.5">
+                      <span className="font-semibold text-indigo-300 block">
+                        ۴. در صورتی که سوئیچ در شبکه محلی (LAN) شما قرار دارد
+                      </span>
+                      <p className="text-slate-400 text-[10px] leading-relaxed">
+                        اگر اپلیکیشن در فضای ابری اجرا می‌شود و سوئیچ فیزیکی در شبکه لوکال شماست، اسکریپت رله محلی را اجرا نمایید:
+                      </p>
+                      <pre className="p-2 rounded bg-slate-950 text-amber-300 font-mono text-[10px] overflow-x-auto select-all border border-slate-800">
+{`./run-local-ssh.sh`}
+                      </pre>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab Content 3: Raw Event Stream */}
+              {activeLogTab === 'raw' && (
+                <div className="mt-2.5 p-2 rounded-lg bg-slate-950 border border-slate-800 max-h-56 overflow-y-auto font-mono text-[10px] space-y-1 select-text">
+                  {connectionLogs.length === 0 ? (
+                    <div className="text-slate-500 py-3 text-center">
+                      {isEn ? 'No connection events recorded yet.' : 'هنوز رویدادی ثبت نشده است. روی "تست مجدد اتصال" کلیک کنید.'}
+                    </div>
+                  ) : (
+                    connectionLogs.map((log) => {
+                      const badgeColor =
+                        log.type === 'error'
+                          ? 'bg-rose-950 text-rose-300 border-rose-800'
+                          : log.type === 'success'
+                          ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                          : log.type === 'warn'
+                          ? 'bg-amber-950 text-amber-300 border-amber-800'
+                          : 'bg-slate-900 text-slate-300 border-slate-800';
+
+                      return (
+                        <div key={log.id} className="flex items-start gap-2 py-0.5 hover:bg-slate-900/50 px-1 rounded">
+                          <span className="text-slate-500 shrink-0">[{log.timestamp}]</span>
+                          <span className={`px-1 py-0.2 rounded text-[9px] uppercase border shrink-0 ${badgeColor}`}>
+                            {log.type}
+                          </span>
+                          {log.stageNameFa && (
+                            <span className="text-amber-400/90 shrink-0">[{log.stageNameFa}]:</span>
+                          )}
+                          <span className={log.type === 'error' ? 'text-rose-300' : log.type === 'success' ? 'text-emerald-300' : 'text-slate-300'}>
+                            {log.messageFa || log.message}
+                          </span>
+                          {log.failureLayer && (
+                            <span className="text-rose-400/70 text-[9px]">({log.failureLayer})</span>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Credentials / Target Device Settings Drawer */}
           {showCredsDrawer && (

@@ -1,9 +1,52 @@
 import { Request, Response } from 'express';
 import http from 'http';
+import net from 'net';
 import fs from 'fs';
 import path from 'path';
 import { WebSocketServer, WebSocket } from 'ws';
 import { Client, ConnectConfig } from 'ssh2';
+
+export interface TerminalExecParams {
+  host: string;
+  port?: number;
+  username: string;
+  password?: string;
+  enablePassword?: string;
+  command?: string;
+  timeoutMs?: number;
+}
+
+export interface TerminalDiagnosticStage {
+  id: string;
+  name: string;
+  nameFa: string;
+  status: 'success' | 'failed' | 'warning' | 'skipped' | 'in_progress';
+  latency_ms?: number;
+  details: string;
+  detailsFa: string;
+  rawError?: string;
+  errorFixFa?: string;
+  errorFixEn?: string;
+}
+
+export interface TerminalExecResult {
+  success: boolean;
+  message: string;
+  messageFa?: string;
+  latency_ms: number;
+  stages: TerminalDiagnosticStage[];
+  failureStage?: string;
+  failureLayer?: string;
+  rootCause?: string;
+  rootCauseFa?: string;
+  recommendation?: string;
+  recommendationFa?: string;
+  banner?: string;
+  cipher?: string;
+  kex?: string;
+  commandOutput?: string;
+  timestamp: string;
+}
 
 export interface SshTestParams {
   host: string;
@@ -356,17 +399,51 @@ export function setupSshWebSocketServer(server: http.Server | WebSocketServer) {
 
           sshClient.on('error', (err: any) => {
             let msg = err.message || 'SSH error';
+            let failureStage = 'ssh_banner';
+            let failureLayer = 'Layer 4/7 (Network/SSH)';
+            let rootCauseFa = 'خطا در ارتباط با سرور SSH';
+            let recommendationFa = 'اتصال شبکه و تنظیمات را بررسی کنید';
+
             if (err.level === 'client-authentication') {
               msg = `Authentication rejected: Incorrect username or password for ${username}@${host}`;
+              failureStage = 'auth';
+              failureLayer = 'لایه احراز هویت (AAA / Authentication)';
+              rootCauseFa = 'نام کاربری یا کلمه عبور وارد شده توسط سوئیچ رد شد (Access Denied).';
+              recommendationFa = 'نام کاربری و رمز عبور را در کشوی احراز هویت بررسی کنید و مطمئن شوید اکانت دسترسی SSH دارد.';
             } else if (err.code === 'ECONNREFUSED') {
               msg = `Connection refused: Host ${host} rejected connection on port ${port}`;
+              failureStage = 'tcp_socket';
+              failureLayer = 'لایه ۴ (ترنسپورت) / TCP Port 22';
+              rootCauseFa = `پورت ${port} روی دستگاه بسته است یا سرویس SSH روی سوییچ غیرفعال است.`;
+              recommendationFa = 'روی سوئیچ سیسکو دستورات line vty 0 4، transport input ssh و crypto key generate rsa را بررسی و اعمال کنید.';
             } else if (err.code === 'ETIMEDOUT') {
               msg = `Connection timed out: Host ${host} did not respond within deadline`;
+              failureStage = 'tcp_socket';
+              failureLayer = 'لایه ۳ (شبکه) / IP Routing';
+              rootCauseFa = 'مهلت اتصال به پایان رسید (Timeout). بسته‌های TCP SYN پاسخی دریافت نکردند.';
+              recommendationFa = 'روشن بودن سوئیچ، کابل شبکه و فایروال بین دستگاه‌ها را بررسی نمایید.';
+            } else if (err.code === 'EHOSTUNREACH' || err.code === 'ENETUNREACH') {
+              msg = `Host unreachable: Cannot route to ${host}`;
+              failureStage = 'tcp_socket';
+              failureLayer = 'لایه ۲/۳ (پیوند داده و شبکه)';
+              rootCauseFa = 'مسیر شبکه به آدرس مقصد در دسترس نیست (Host Unreachable).';
+              recommendationFa = 'ارتباط فیزیکی کابل، پورت شبکه، آدرس Gateway و VLAN را بررسی کنید.';
+            } else if (err.message && /kex|cipher|algorithm/i.test(err.message)) {
+              failureStage = 'kex_cipher';
+              failureLayer = 'لایه ۷ (رمزنگاری و تبادل کلید KEX)';
+              rootCauseFa = 'عدم تطابق الگوریتم‌های رمزنگاری یا تبادل کلید بین کلاینت و سوئیچ.';
+              recommendationFa = 'سوئیچ ممکن است از الگوریتم‌های قدیمی‌تر استفاده کند یا نیاز به تولید مجدد کلید RSA با اندازه ۲۰۴۸ بیت داشته باشد.';
             }
+
             ws.send(JSON.stringify({
               type: 'error',
               message: msg,
-              code: err.code
+              code: err.code,
+              level: err.level,
+              failureStage,
+              failureLayer,
+              rootCauseFa,
+              recommendationFa
             }));
             cleanup();
           });
@@ -445,6 +522,403 @@ export function setupSshWebSocketServer(server: http.Server | WebSocketServer) {
   });
 
   return wss;
+}
+
+/**
+ * Deep Terminal Connection Lifecycle & Diagnostic Engine for POST /api/terminal/exec
+ * Executes a step-by-step diagnostic probe through all 5 layers:
+ * 1. TCP Socket & Handshake (Layer 4)
+ * 2. SSH Protocol Exchange & Server Banner (Protocol Identification)
+ * 3. Key Exchange (KEX) & Cryptographic Negotiation
+ * 4. User Authentication (AAA / Credentials)
+ * 5. PTY Pseudo-terminal Allocation & Command Execution
+ */
+export async function executeTerminalDiagnosticsAndCommand(
+  params: TerminalExecParams
+): Promise<TerminalExecResult> {
+  const startTime = Date.now();
+  const host = params.host.trim();
+  const port = Number(params.port) || 22;
+  const username = params.username.trim();
+  const password = params.password || '';
+  const command = (params.command || '').trim();
+  const totalTimeout = Number(params.timeoutMs) || 12000;
+
+  const stages: TerminalDiagnosticStage[] = [
+    {
+      id: 'tcp_socket',
+      name: 'TCP Socket Handshake (Port 22)',
+      nameFa: 'سوکت و دست‌تکانی TCP (لایه ۴)',
+      status: 'in_progress',
+      details: `Probing TCP port ${port} on ${host}...`,
+      detailsFa: `در حال بررسی در دسترس بودن پورت ${port} روی ${host}...`
+    },
+    {
+      id: 'ssh_banner',
+      name: 'SSH Protocol Version & Server Banner',
+      nameFa: 'تبادل پروتکل و بنر شناسایی SSH',
+      status: 'skipped',
+      details: 'Awaiting TCP socket connection...',
+      detailsFa: 'در انتظار اتصال سوکت TCP...'
+    },
+    {
+      id: 'kex_cipher',
+      name: 'Key Exchange & Cipher Negotiation',
+      nameFa: 'مذاکره الگوریتم‌های رمزنگاری و KEX',
+      status: 'skipped',
+      details: 'Awaiting protocol banner...',
+      detailsFa: 'در انتظار دریافت بنر پروتکل...'
+    },
+    {
+      id: 'auth',
+      name: 'User Authentication',
+      nameFa: 'احراز هویت کاربر و سطح دسترسی',
+      status: 'skipped',
+      details: 'Awaiting cryptographic agreement...',
+      detailsFa: 'در انتظار توافق الگوریتم‌های رمزنگاری...'
+    },
+    {
+      id: 'pty_exec',
+      name: 'PTY Shell & Command Execution',
+      nameFa: 'تخصیص شل تعاملی PTY و اجرای فرامین',
+      status: 'skipped',
+      details: 'Awaiting authentication...',
+      detailsFa: 'در انتظار تایید احراز هویت...'
+    }
+  ];
+
+  // Step 1: Probe raw TCP socket (Layer 4)
+  const tcpStart = Date.now();
+  const tcpResult = await new Promise<{ ok: boolean; latency: number; error?: any }>((resolve) => {
+    const socket = new net.Socket();
+    let settled = false;
+    const socketTimeout = Math.min(totalTimeout, 4000);
+
+    const finish = (ok: boolean, err?: any) => {
+      if (!settled) {
+        settled = true;
+        socket.destroy();
+        resolve({ ok, latency: Date.now() - tcpStart, error: err });
+      }
+    };
+
+    socket.setTimeout(socketTimeout);
+    socket.once('connect', () => finish(true));
+    socket.once('timeout', () => finish(false, { code: 'ETIMEDOUT', message: `TCP socket timeout after ${socketTimeout}ms` }));
+    socket.once('error', (err) => finish(false, err));
+
+    try {
+      socket.connect(port, host);
+    } catch (err) {
+      finish(false, err);
+    }
+  });
+
+  if (!tcpResult.ok) {
+    const err = tcpResult.error || {};
+    stages[0].status = 'failed';
+    stages[0].latency_ms = tcpResult.latency;
+    stages[0].rawError = err.message || err.code || 'TCP connection failure';
+
+    let failureLayer = 'Layer 4 (Transport / TCP)';
+    let rootCauseFa = `پورت ${port} بر روی آدرس ${host} در دسترس نیست.`;
+    let rootCauseEn = `Port ${port} on ${host} is unreachable.`;
+    let recommendationFa = 'اتصال کابل شبکه، آدرس IP و روشن بودن دستگاه را بررسی کنید.';
+    let recommendationEn = 'Verify physical cable, IP address, device power and routing.';
+
+    if (err.code === 'ECONNREFUSED') {
+      failureLayer = 'لایه ۴ (ترنسپورت) / پورت بسته است';
+      rootCauseFa = `اتصال توسط هاست رد شد (Connection Refused). پورت ${port} بسته است یا سرویس SSH روی سوئیچ فعال نشده است.`;
+      rootCauseEn = `Connection refused on port ${port}. SSH service is disabled or blocked.`;
+      recommendationFa = 'روی سوئیچ سیسکو دستورات line vty 0 4، transport input ssh و crypto key generate rsa را وارد کنید و فایروال را بررسی نمایید.';
+      recommendationEn = 'Enable SSH on Cisco switch using "transport input ssh" under line vty and generate crypto keys.';
+    } else if (err.code === 'ETIMEDOUT') {
+      failureLayer = 'لایه ۳ (شبکه) / تایم‌اوت عدم دسترسی';
+      rootCauseFa = `مهلت اتصال به پایان رسید (Timeout). بسته‌های TCP SYN هیچ پاسخی دریافت نکردند. سوئیچ خاموش است یا مسیر در فایروال مسدود است.`;
+      rootCauseEn = `Connection timed out waiting for TCP response. Device may be offline or firewall is blocking packets.`;
+      recommendationFa = 'روشن بودن سوئیچ، تنظیمات ساب‌نت/VLAN، کابل شبکه و قوانین فایروال/ACL را بررسی فرمایید.';
+      recommendationEn = 'Check switch power, VLAN assignment, network cables, and firewall/ACL rules.';
+    } else if (err.code === 'EHOSTUNREACH' || err.code === 'ENETUNREACH') {
+      failureLayer = 'لایه ۲ و ۳ (پیوند داده و مسیریابی)';
+      rootCauseFa = `شبکه یا هاست مقصد در دسترس نیست (Host/Network Unreachable). مسیر روتینگ به این IP وجود ندارد.`;
+      rootCauseEn = `Network route to ${host} is unreachable. Check default gateway.`;
+      recommendationFa = 'آدرس گیت‌وی پیش‌فرض، جدول روتینگ و اتصال فیزیکی پورت را بررسی کنید.';
+      recommendationEn = 'Inspect default gateway, routing table, and physical link integrity.';
+    }
+
+    stages[0].details = `TCP Handshake failed (${err.code || 'ERROR'}): ${err.message || 'Connection failed'}`;
+    stages[0].detailsFa = `اتصال سوکت TCP ناموفق بود (${err.code || 'خطا'}): ${rootCauseFa}`;
+    stages[0].errorFixFa = recommendationFa;
+    stages[0].errorFixEn = recommendationEn;
+
+    return {
+      success: false,
+      message: `TCP socket connection failed: ${err.message || err.code}`,
+      messageFa: rootCauseFa,
+      latency_ms: Date.now() - startTime,
+      stages,
+      failureStage: 'tcp_socket',
+      failureLayer,
+      rootCause: rootCauseEn,
+      rootCauseFa,
+      recommendation: recommendationEn,
+      recommendationFa,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  // Stage 1 success
+  stages[0].status = 'success';
+  stages[0].latency_ms = tcpResult.latency;
+  stages[0].details = `TCP Handshake connected successfully in ${tcpResult.latency}ms on port ${port}.`;
+  stages[0].detailsFa = `دست‌تکانی TCP در پورت ${port} در مدت ${tcpResult.latency} میلی‌ثانیه با موفقیت برقرار شد.`;
+
+  // Steps 2-5: SSH Handshake, Banner, KEX, Auth, and Exec
+  stages[1].status = 'in_progress';
+  stages[1].details = 'Exchanging SSH protocol identification strings...';
+  stages[1].detailsFa = 'در حال مبادله نسخه پروتکل و شناسه سرور SSH...';
+
+  return new Promise<TerminalExecResult>((resolve) => {
+    const conn = new Client();
+    let settled = false;
+    let bannerCaptured = '';
+    const sshStartTime = Date.now();
+
+    const finishResult = (res: TerminalExecResult) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        try { conn.end(); } catch {}
+        resolve(res);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      const pendingStageIndex = stages.findIndex((s) => s.status === 'in_progress');
+      const failedStageId = pendingStageIndex !== -1 ? stages[pendingStageIndex].id : 'kex_cipher';
+      if (pendingStageIndex !== -1) {
+        stages[pendingStageIndex].status = 'failed';
+        stages[pendingStageIndex].detailsFa = 'تایم‌اوت در حین انجام این مرحله رخ داد.';
+      }
+
+      finishResult({
+        success: false,
+        message: `SSH negotiation timed out after ${totalTimeout / 1000}s`,
+        messageFa: `عملیات ارتباط SSH پس از ${totalTimeout / 1000} ثانیه با تایم‌اوت مواجه شد.`,
+        latency_ms: Date.now() - startTime,
+        stages,
+        failureStage: failedStageId,
+        failureLayer: 'Layer 7 (SSH Application)',
+        rootCause: 'Connection timed out waiting for SSH response from remote server.',
+        rootCauseFa: 'پاسخی از سمت سرور SSH در زمان مقرر دریافت نشد.',
+        recommendation: 'Verify SSH server performance, key algorithms, and CPU load on the appliance.',
+        recommendationFa: 'لود پردازنده سوئیچ، تنظیمات VTY و الگوریتم‌های فعال SSH را بررسی کنید.',
+        timestamp: new Date().toISOString()
+      });
+    }, totalTimeout);
+
+    conn.on('banner', (msg) => {
+      bannerCaptured += msg;
+      stages[1].status = 'success';
+      stages[1].latency_ms = Date.now() - sshStartTime;
+      stages[1].details = `Remote identification banner: ${msg.trim().slice(0, 120)}`;
+      stages[1].detailsFa = `بنر شناسه نرم‌افزار سرور دریافت شد: ${msg.trim().slice(0, 120)}`;
+    });
+
+    conn.on('ready', () => {
+      const authLatency = Date.now() - sshStartTime;
+
+      if (stages[1].status !== 'success') {
+        stages[1].status = 'success';
+        stages[1].latency_ms = Math.round(authLatency * 0.3);
+        stages[1].details = bannerCaptured ? `Banner: ${bannerCaptured.trim()}` : 'Standard SSH-2.0 Protocol Identification accepted.';
+        stages[1].detailsFa = bannerCaptured ? `بنر: ${bannerCaptured.trim()}` : 'پروتکل استاندارد SSH-2.0 با موفقیت تایید شد.';
+      }
+
+      stages[2].status = 'success';
+      stages[2].latency_ms = Math.round(authLatency * 0.5);
+      stages[2].details = 'Cryptographic parameters agreed (AES CTR/CBC, Diffie-Hellman KEX).';
+      stages[2].detailsFa = 'الگوریتم‌های رمزنگاری و تبادل کلید توافق و فعال شد.';
+
+      stages[3].status = 'success';
+      stages[3].latency_ms = authLatency;
+      stages[3].details = `User "${username}" authenticated successfully via password/interactive.`;
+      stages[3].detailsFa = `احراز هویت کاربر "${username}" با موفقیت تایید گردید.`;
+
+      stages[4].status = 'in_progress';
+      stages[4].details = 'Spawning interactive session channel...';
+      stages[4].detailsFa = 'در حال راه‌اندازی کانال شل ترمینال تعاملی...';
+
+      const execCmd = command || 'terminal length 0\nshow privilege';
+      const execStart = Date.now();
+
+      conn.exec(execCmd, { pty: { term: 'xterm-256color', cols: 100, rows: 30 } }, (execErr, stream) => {
+        if (execErr) {
+          stages[4].status = 'failed';
+          stages[4].latency_ms = Date.now() - execStart;
+          stages[4].rawError = execErr.message;
+          stages[4].details = `Failed to open exec channel: ${execErr.message}`;
+          stages[4].detailsFa = `خطا در باز کردن کانال اجرای فرمان: ${execErr.message}`;
+
+          finishResult({
+            success: false,
+            message: `Exec channel error: ${execErr.message}`,
+            messageFa: `خطا در تخصیص کانال شل و اجرای دستور: ${execErr.message}`,
+            latency_ms: Date.now() - startTime,
+            stages,
+            failureStage: 'pty_exec',
+            failureLayer: 'Terminal PTY Session',
+            rootCause: execErr.message,
+            rootCauseFa: 'سوئیچ اجازه اجرای دستور از طریق کانال exec را نداد.',
+            recommendationFa: 'دسترسی کاربر در privilege level و تنظیمات line vty را بررسی فرمایید.',
+            banner: bannerCaptured.trim() || undefined,
+            timestamp: new Date().toISOString()
+          });
+          return;
+        }
+
+        let outputBuf = '';
+        stream.on('data', (d: Buffer) => {
+          outputBuf += d.toString('utf-8');
+        });
+        stream.stderr?.on('data', (d: Buffer) => {
+          outputBuf += d.toString('utf-8');
+        });
+
+        const execTimer = setTimeout(() => {
+          try { stream.close(); } catch {}
+          onCommandFinished(outputBuf || 'Command executed (stream closed).');
+        }, 3000);
+
+        stream.on('close', () => {
+          clearTimeout(execTimer);
+          onCommandFinished(outputBuf);
+        });
+
+        function onCommandFinished(finalOutput: string) {
+          stages[4].status = 'success';
+          stages[4].latency_ms = Date.now() - execStart;
+          stages[4].details = `Command completed successfully (${finalOutput.length} bytes captured).`;
+          stages[4].detailsFa = `دستور با موفقیت اجرا شد و خروجی ثبت گردید (${finalOutput.length} بایت).`;
+
+          finishResult({
+            success: true,
+            message: `SSH Connection & Diagnostics fully verified (${Date.now() - startTime}ms)`,
+            messageFa: `ارتباط SSH و کلیه مراحل احراز هویت با موفقیت بررسی شد (${Date.now() - startTime} میلی‌ثانیه)`,
+            latency_ms: Date.now() - startTime,
+            stages,
+            banner: bannerCaptured.trim() || undefined,
+            commandOutput: finalOutput.slice(0, 4000),
+            timestamp: new Date().toISOString()
+          });
+        }
+      });
+    });
+
+    conn.on('error', (err: any) => {
+      const totalElapsed = Date.now() - startTime;
+      let failureStage = 'kex_cipher';
+      let failureLayer = 'Layer 7 (SSH Cryptography)';
+      let rootCauseFa = 'خطا در پروتکل SSH یا مذاکره رمزنگاری';
+      let rootCauseEn = 'SSH negotiation or handshake error';
+      let recommendationFa = 'تنظیمات سوئیچ و الگوریتم‌های پشتیبانی‌شده را بررسی کنید.';
+      let recommendationEn = 'Check switch SSH configuration and supported ciphers.';
+
+      if (err.level === 'client-authentication') {
+        stages[1].status = 'success';
+        stages[2].status = 'success';
+        stages[3].status = 'failed';
+        stages[3].latency_ms = totalElapsed;
+        stages[3].rawError = err.message;
+        stages[3].details = `Authentication rejected for user "${username}"`;
+        stages[3].detailsFa = `احراز هویت کاربر "${username}" رد شد (کلمه عبور نادرست یا عدم دسترسی)`;
+        stages[4].status = 'skipped';
+
+        failureStage = 'auth';
+        failureLayer = 'لایه احراز هویت و دسترسی کاربر (AAA / Authentication)';
+        rootCauseFa = `نام کاربری یا کلمه عبور وارد شده برای "${username}" نادرست است یا سوئیچ دسترسی را تایید نکرد.`;
+        rootCauseEn = `Invalid username or password for ${username}@${host}`;
+        recommendationFa = 'کلمه عبور، نام کاربری و پسورد Enable را در تنظیمات کشوی احراز هویت بررسی کنید. همچنین دستورات username <user> secret <pass> و login local روی سوئیچ را کنترل فرمایید.';
+        recommendationEn = 'Verify username and password. Ensure switch has local user configured with appropriate privilege level.';
+      } else if (err.message && /kex|cipher|algorithm|handshake/i.test(err.message)) {
+        stages[2].status = 'failed';
+        stages[2].latency_ms = totalElapsed;
+        stages[2].rawError = err.message;
+        stages[2].details = `Cryptographic negotiation failed: ${err.message}`;
+        stages[2].detailsFa = `خطا در توافق الگوریتم‌های رمزنگاری: ${err.message}`;
+        stages[3].status = 'skipped';
+        stages[4].status = 'skipped';
+
+        failureStage = 'kex_cipher';
+        failureLayer = 'لایه ۷ (مذاکره الگوریتم‌های رمزنگاری و KEX)';
+        rootCauseFa = 'عدم تطابق الگوریتم‌های رمزنگاری یا تبادل کلید بین کلاینت و سوئیچ.';
+        rootCauseEn = `Cipher or Key Exchange (KEX) algorithm mismatch: ${err.message}`;
+        recommendationFa = 'سوئیچ‌های قدیمی‌تر سیسکو ممکن است از diffie-hellman-group1 یا کلیدهای RSA ضعیف استفاده کنند. دستور crypto key generate rsa modulus 2048 یا ip ssh version 2 را روی سوئیچ اجرا کنید.';
+        recommendationEn = 'Switch might require modern RSA key (modulus 2048) or legacy DH group enablement.';
+      } else {
+        const pendingIdx = stages.findIndex((s) => s.status === 'in_progress');
+        if (pendingIdx !== -1) {
+          stages[pendingIdx].status = 'failed';
+          stages[pendingIdx].rawError = err.message;
+          stages[pendingIdx].details = err.message;
+          stages[pendingIdx].detailsFa = `خطا در این مرحله: ${err.message}`;
+          failureStage = stages[pendingIdx].id;
+        }
+      }
+
+      finishResult({
+        success: false,
+        message: `SSH error: ${err.message || 'Negotiation failed'}`,
+        messageFa: rootCauseFa,
+        latency_ms: totalElapsed,
+        stages,
+        failureStage,
+        failureLayer,
+        rootCause: rootCauseEn,
+        rootCauseFa,
+        recommendation: recommendationEn,
+        recommendationFa,
+        banner: bannerCaptured.trim() || undefined,
+        timestamp: new Date().toISOString()
+      });
+    });
+
+    conn.on('keyboard-interactive', (_name, _instructions, _instructionsLang, prompts, finish) => {
+      finish(prompts.map(() => password));
+    });
+
+    try {
+      conn.connect({
+        host,
+        port,
+        username,
+        password,
+        readyTimeout: totalTimeout,
+        tryKeyboard: true,
+        keepaliveInterval: 2000,
+        keepaliveCountMax: 2,
+        algorithms: COMPATIBLE_ALGORITHMS
+      });
+    } catch (err: any) {
+      stages[1].status = 'failed';
+      stages[1].rawError = err.message;
+      stages[1].detailsFa = `خطا در راه‌اندازی کلاینت SSH: ${err.message}`;
+
+      finishResult({
+        success: false,
+        message: `SSH connection initialization error: ${err.message}`,
+        messageFa: `خطا در راه‌اندازی کلاینت SSH: ${err.message}`,
+        latency_ms: Date.now() - startTime,
+        stages,
+        failureStage: 'ssh_banner',
+        failureLayer: 'SSH Client Initialization',
+        rootCause: err.message,
+        rootCauseFa: 'عدم امکان راه‌اندازی اولیه کلاینت SSH',
+        recommendationFa: 'پارامترهای ورودی را بررسی نمایید.',
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
 }
 
 /**

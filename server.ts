@@ -10,7 +10,8 @@ import {
   setupSshWebSocketServer,
   fetchRealSwitchDataViaSsh,
   syncDeviceWithRealSwitch,
-  applyPortConfigViaSsh
+  applyPortConfigViaSsh,
+  executeTerminalDiagnosticsAndCommand
 } from './server/sshManager';
 import {
   testRealTelnetConnection,
@@ -126,6 +127,40 @@ app.post('/api/ssh/test', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: `SSH test error: ${err.message}`
+    });
+  }
+});
+
+// Interactive Real SSH Terminal Execution & Deep Diagnostics endpoint
+app.post('/api/terminal/exec', async (req: Request, res: Response) => {
+  try {
+    const { host, port, username, password, enablePassword, command, timeoutMs } = req.body || {};
+    if (!host || !username) {
+      return res.status(400).json({
+        success: false,
+        message: 'Host and username are required for terminal execution & diagnostics',
+        stages: []
+      });
+    }
+
+    console.log(`[Terminal Exec API] Running diagnostic execution pipeline on ${username}@${host}:${port || 22}...`);
+    const result = await executeTerminalDiagnosticsAndCommand({
+      host: String(host).trim(),
+      port: Number(port) || 22,
+      username: String(username).trim(),
+      password: password !== undefined ? String(password) : '',
+      enablePassword: enablePassword !== undefined ? String(enablePassword) : '',
+      command: command !== undefined ? String(command) : '',
+      timeoutMs: Number(timeoutMs) || 12000
+    });
+
+    res.json(result);
+  } catch (err: any) {
+    console.error('[Terminal Exec API] Unexpected error in /api/terminal/exec:', err);
+    res.status(500).json({
+      success: false,
+      message: `Terminal diagnostics execution error: ${err.message}`,
+      stages: []
     });
   }
 });
