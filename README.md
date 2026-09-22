@@ -208,8 +208,13 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
 ### ۱۶. ماژول تست و عیب‌یابی SSH واقعی با Paramiko 2 و وب‌سوکت (Real SSH Testing, 8-Layer Diagnostic & Paramiko 2 Engine)
 - **ارتباط کاملاً واقعی بدون داده‌های فیک یا شبیه‌سازی:**
   - اتصال مستقیم به تجهیزات واقعی لینوکس (Ubuntu, Debian, RHEL, CentOS)، روترها و سوئیچ‌های سیسکو (IOS / IOS-XE)، میکروتیک (MikroTik RouterOS) و سایر تجهیزات شبکه مبتنی بر SSHv2.
-- **موتور قدرتمند و مستقل پایتون با کتابخانه Paramiko 2.12.0:**
+- **موتور قدرتمند و مستقل پایتون با کتابخانه Paramiko 2.12.0 و پچ سازگاری SSH Version 2:**
   - پیاده‌سازی بک‌اند اختصاصی در مسیر `/backend/ssh_test/` به همراه مخزن مستقل `ssh_test_devices.json` با رمزنگاری پیشرفته کلیدهای عبور و کلیدهای خصوصی SSH با الگوریتم AES-CBC و توکن‌های نشست ۶۰ ثانیه‌ای موقت.
+  - **پشتیبانی کامل از سوئیچ‌ها و روترهای سیسکو مبتنی بر SSH v2 و رفع خطای عدم تطابق KEX:**
+    - تجهیز به ماژول پچ کریپتوگرافی `kex_patch.py` و `CiscoCompatibleTransport` جهت گسترش الگوریتم‌های تبادل کلید (Key Exchange) و سایفرهای رمزنگاری به منظور رفع کامل خطای `Incompatible ssh peer (no acceptable kex algorithm)`.
+    - پشتیبانی فعال و دوطرفه از الگوریتم‌های مدرن و کلاسیک سیسکو: `curve25519-sha256`, `curve25519-sha256@libssh.org`, `ecdh-sha2-nistp256/384/521`, `diffie-hellman-group-exchange-sha256`, `diffie-hellman-group14-sha256`, `diffie-hellman-group16-sha512` و الگوریتم‌های متداول سوئیچ‌های Catalyst / IOS 12 & 15 نظیر `diffie-hellman-group-exchange-sha1`, `diffie-hellman-group14-sha1` و `diffie-hellman-group1-sha1`.
+    - پشتیبانی از تمام سایفرهای استاندارد شبکه (`aes128-ctr`, `aes256-ctr`, `aes128-cbc`, `aes256-cbc`, `3des-cbc`).
+
 - **سیستم ممیزی ۸ لایه فرانت تا بک‌اند (End-to-End 8-Layer Diagnostic Audit):**
   - بررسی و تفکیک بلادرنگ تمامی لایه‌های ارتباطی:
     1. **REST Gateway Bridge:** بررسی ارتباط مرورگر با درگاه Node.js و پراکسی پایتون
@@ -636,8 +641,13 @@ npm start
 ### 16. Real SSH Testing, 8-Layer Diagnostic & Paramiko 2 Engine
 - **100% Genuine SSH Connections with Zero Mock Data:**
   - Direct, unsimulated SSHv2 connections to physical Linux servers, Cisco routers/switches, MikroTik RouterOS appliances, and generic SSH network devices.
-- **Isolated Python Paramiko 2.12.0 Backend Architecture:**
+- **Isolated Python Paramiko 2.12.0 Backend Architecture & SSH Version 2 Compatibility:**
   - Self-contained microservice under `/backend/ssh_test/` using an encrypted device credentials vault (`ssh_test_devices.json`) protected with AES-CBC and one-time 60-second session tokens.
+  - **Full Cisco & Legacy Network Switch SSH v2 Support (KEX Mismatch Fix):**
+    - Equipped with `kex_patch.py` and `CiscoCompatibleTransport` to resolve `Incompatible ssh peer (no acceptable kex algorithm)` errors across network switches.
+    - Full bidirectional support for both modern curves (`curve25519-sha256`, `curve25519-sha256@libssh.org`, `ecdh-sha2-nistp256/384/521`, `diffie-hellman-group-exchange-sha256`, `diffie-hellman-group14-sha256`, `diffie-hellman-group16-sha512`) and Cisco Catalyst / IOS legacy algorithms (`diffie-hellman-group-exchange-sha1`, `diffie-hellman-group14-sha1`, `diffie-hellman-group1-sha1`).
+    - Full cipher suite support (`aes128-ctr`, `aes256-ctr`, `aes128-cbc`, `aes256-cbc`, `3des-cbc`).
+
 - **Comprehensive 8-Layer End-to-End Diagnostic Audit:**
   - Step-by-step diagnostic verification from client browser to remote hardware:
     1. **Frontend REST Gateway Bridge:** Validates HTTP communication between React, Node.js, and Python router.

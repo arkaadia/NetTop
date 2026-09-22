@@ -12,6 +12,10 @@ import io
 import select
 from typing import Optional, Dict, Any
 import paramiko
+try:
+    from .kex_patch import configure_paramiko_security, CiscoCompatibleTransport
+except ImportError:
+    from kex_patch import configure_paramiko_security, CiscoCompatibleTransport
 
 def run_worker_stdio():
     """
@@ -49,6 +53,7 @@ def run_worker_stdio():
         sys.stderr.write("[Worker] host and username are required.\n")
         sys.exit(1)
 
+    configure_paramiko_security()
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
@@ -58,8 +63,10 @@ def run_worker_stdio():
         "username": username,
         "timeout": 12,
         "look_for_keys": False,
-        "allow_agent": False
+        "allow_agent": False,
+        "transport_factory": CiscoCompatibleTransport
     }
+
 
     if auth_type == "key" and private_key:
         try:

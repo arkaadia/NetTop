@@ -9,6 +9,7 @@ import time
 from typing import Dict, Any, Tuple, Optional
 import paramiko
 from .models import SshTestDevice
+from .kex_patch import configure_paramiko_security, CiscoCompatibleTransport
 
 def _execute_command(client: paramiko.SSHClient, cmd: str, timeout: int = 10) -> Tuple[int, str, str]:
     try:
@@ -31,6 +32,7 @@ def fetch_device_data(
     Returns (success, result_dict, error_message).
     """
     start_time = time.time()
+    configure_paramiko_security()
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
@@ -40,8 +42,10 @@ def fetch_device_data(
         "username": device.username,
         "timeout": timeout,
         "look_for_keys": False,
-        "allow_agent": False
+        "allow_agent": False,
+        "transport_factory": CiscoCompatibleTransport
     }
+
 
     if device.auth_type == "key" and plain_key:
         try:

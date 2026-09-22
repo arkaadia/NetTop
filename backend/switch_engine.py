@@ -33,8 +33,18 @@ PARAMIKO_AVAILABLE = False
 try:
     import paramiko
     PARAMIKO_AVAILABLE = True
+    try:
+        from ssh_test.kex_patch import configure_paramiko_security, CiscoCompatibleTransport
+        configure_paramiko_security()
+    except Exception:
+        try:
+            from backend.ssh_test.kex_patch import configure_paramiko_security, CiscoCompatibleTransport
+            configure_paramiko_security()
+        except Exception:
+            CiscoCompatibleTransport = None
 except ImportError:
     PARAMIKO_AVAILABLE = False
+    CiscoCompatibleTransport = None
 
 
 def get_engine_status() -> Dict[str, Any]:
@@ -233,15 +243,19 @@ def execute_switch_command(
         try:
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(
-                ip,
-                port=int(port or 22),
-                username=username,
-                password=password,
-                timeout=timeout,
-                look_for_keys=False,
-                allow_agent=False
-            )
+            conn_kwargs = {
+                "hostname": ip,
+                "port": int(port or 22),
+                "username": username,
+                "password": password,
+                "timeout": timeout,
+                "look_for_keys": False,
+                "allow_agent": False
+            }
+            if CiscoCompatibleTransport:
+                conn_kwargs["transport_factory"] = CiscoCompatibleTransport
+            ssh.connect(**conn_kwargs)
+
             
             # Interactive shell for Cisco commands
             chan = ssh.invoke_shell(width=120, height=40)

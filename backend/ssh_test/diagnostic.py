@@ -10,6 +10,7 @@ import time
 from typing import Dict, Any, List, Optional, Tuple
 import paramiko
 from .models import SshTestDevice
+from .kex_patch import configure_paramiko_security, CiscoCompatibleTransport
 
 def run_end_to_end_diagnostic(
     device: SshTestDevice,
@@ -238,6 +239,7 @@ def run_end_to_end_diagnostic(
 
     # Layer 7: Paramiko SSH Authentication & Key Exchange
     t0 = time.time()
+    configure_paramiko_security()
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
@@ -247,8 +249,10 @@ def run_end_to_end_diagnostic(
         "username": device.username,
         "timeout": timeout,
         "look_for_keys": False,
-        "allow_agent": False
+        "allow_agent": False,
+        "transport_factory": CiscoCompatibleTransport
     }
+
 
     if device.auth_type == "key" and plain_key:
         try:
@@ -291,8 +295,9 @@ def run_end_to_end_diagnostic(
         client.connect(**connect_kwargs)
         auth_latency = round((time.time() - t0) * 1000, 2)
         transport = client.get_transport()
-        remote_cipher = transport.get_cipher_name() if transport else "N/A"
-        remote_kex = transport.kex_engine if transport else "N/A"
+        remote_cipher = getattr(transport, "remote_cipher", None) or getattr(transport, "local_cipher", "N/A")
+        remote_kex_engine = getattr(transport, "kex_engine", None)
+        remote_kex = type(remote_kex_engine).__name__ if remote_kex_engine else getattr(transport, "host_key_type", "SSH-2")
 
         steps.append({
             "layer_id": "PARAMIKO_AUTH",
@@ -300,9 +305,10 @@ def run_end_to_end_diagnostic(
             "title_en": f"SSH User Authentication '{device.username}' (Passed)",
             "status": "passed",
             "latency_ms": auth_latency,
-            "details": f"احراز هویت تایید شد. سایفر فعال: {remote_cipher} | مبادله کلید: {remote_kex}",
+            "details": f"احراز هویت تایید شد. سایفر فعال: {remote_cipher} | الگوریتم KEX: {remote_kex}",
             "details_en": f"Authentication accepted. Active cipher: {remote_cipher} | KEX: {remote_kex}"
         })
+
     except paramiko.AuthenticationException as auth_err:
         steps.append({
             "layer_id": "PARAMIKO_AUTH",
