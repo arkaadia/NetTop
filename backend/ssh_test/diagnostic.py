@@ -16,20 +16,30 @@ def run_end_to_end_diagnostic(
     device: SshTestDevice,
     plain_password: str = "",
     plain_key: str = "",
-    timeout: int = 10
+    timeout: int = 10,
+    progress_callback: Optional[Any] = None
 ) -> Dict[str, Any]:
     """
     Executes a structured 8-layer diagnostic audit.
     Identifies the exact layer where communication breaks down.
+    Streams each step via progress_callback if provided.
     """
     steps: List[Dict[str, Any]] = []
     overall_status = "passed"
     failed_layer: Optional[str] = None
     resolved_ip: str = ""
 
+    def record_step(s: Dict[str, Any]):
+        steps.append(s)
+        if progress_callback:
+            try:
+                progress_callback(s)
+            except Exception:
+                pass
+
     # Layer 1: Frontend-to-Backend REST Gateway
     t0 = time.time()
-    steps.append({
+    record_step({
         "layer_id": "API_GATEWAY",
         "title_fa": "برقراری ارتباط فرانت‌اند با بک‌اند پایتون (REST Gateway)",
         "title_en": "Frontend to Python REST Gateway Bridge",
@@ -43,7 +53,7 @@ def run_end_to_end_diagnostic(
     t0 = time.time()
     try:
         ver = paramiko.__version__
-        steps.append({
+        record_step({
             "layer_id": "PARAMIKO_RUNTIME",
             "title_fa": f"موتور اجرایی Paramiko 2 (نسخه {ver})",
             "title_en": f"Paramiko 2 Engine Runtime (v{ver})",
@@ -53,7 +63,7 @@ def run_end_to_end_diagnostic(
             "details_en": f"Paramiko {ver} cryptographic core is initialized and ready."
         })
     except Exception as e:
-        steps.append({
+        record_step({
             "layer_id": "PARAMIKO_RUNTIME",
             "title_fa": "موتور اجرایی Paramiko 2",
             "title_en": "Paramiko 2 Engine Runtime",
@@ -73,7 +83,7 @@ def run_end_to_end_diagnostic(
 
     # Layer 3: WebSocket Interactive Tunnel Gateway
     t0 = time.time()
-    steps.append({
+    record_step({
         "layer_id": "WEBSOCKET_GATEWAY",
         "title_fa": "درگاه تعاملی وب‌سوکت (/ws/ssh-test)",
         "title_en": "Interactive WebSocket Gateway (/ws/ssh-test)",
@@ -90,7 +100,7 @@ def run_end_to_end_diagnostic(
         if not addr_info:
             raise socket.gaierror("No address info returned for host")
         resolved_ip = addr_info[0][4][0]
-        steps.append({
+        record_step({
             "layer_id": "DNS_RESOLVE",
             "title_fa": f"تفکیک نام میزبان و آدرس IP ({resolved_ip})",
             "title_en": f"Hostname Resolution to IP ({resolved_ip})",
@@ -100,7 +110,7 @@ def run_end_to_end_diagnostic(
             "details_en": f"Host '{device.host}' successfully resolved to '{resolved_ip}'."
         })
     except socket.gaierror as dns_err:
-        steps.append({
+        record_step({
             "layer_id": "DNS_RESOLVE",
             "title_fa": "تفکیک نام میزبان و آدرس IP",
             "title_en": "Hostname Resolution to IP",
@@ -126,7 +136,7 @@ def run_end_to_end_diagnostic(
         raw_socket.settimeout(timeout)
         raw_socket.connect((resolved_ip, device.port or 22))
         tcp_latency = round((time.time() - t0) * 1000, 2)
-        steps.append({
+        record_step({
             "layer_id": "TCP_LAYER",
             "title_fa": f"لایه شبکه و نشست سه مرحله‌ای TCP پورت {device.port or 22}",
             "title_en": f"Network Layer & TCP Handshake (Port {device.port or 22})",
@@ -136,7 +146,7 @@ def run_end_to_end_diagnostic(
             "details_en": f"TCP port {device.port or 22} is open and accepting sockets (RTT: {tcp_latency}ms)."
         })
     except socket.timeout:
-        steps.append({
+        record_step({
             "layer_id": "TCP_LAYER",
             "title_fa": f"لایه شبکه و نشست سه مرحله‌ای TCP پورت {device.port or 22}",
             "title_en": f"Network Layer & TCP Handshake (Port {device.port or 22})",
@@ -154,7 +164,7 @@ def run_end_to_end_diagnostic(
             "target_port": device.port
         }
     except ConnectionRefusedError:
-        steps.append({
+        record_step({
             "layer_id": "TCP_LAYER",
             "title_fa": f"لایه شبکه و پورت TCP {device.port or 22}",
             "title_en": f"Network Layer (Port {device.port or 22})",
@@ -172,7 +182,7 @@ def run_end_to_end_diagnostic(
             "target_port": device.port
         }
     except Exception as tcp_err:
-        steps.append({
+        record_step({
             "layer_id": "TCP_LAYER",
             "title_fa": f"لایه شبکه (پورت {device.port or 22})",
             "title_en": f"Network Layer (Port {device.port or 22})",
@@ -202,7 +212,7 @@ def run_end_to_end_diagnostic(
 
         if data.startswith("SSH-"):
             banner_str = data.splitlines()[0]
-            steps.append({
+            record_step({
                 "layer_id": "SSH_BANNER",
                 "title_fa": f"مذاکره پروتکل SSH و دریافت بنر شناسایی ({banner_str})",
                 "title_en": f"SSH Protocol Handshake & Banner Exchange ({banner_str})",
@@ -212,7 +222,7 @@ def run_end_to_end_diagnostic(
                 "details_en": f"SSH protocol confirmed. Remote banner: {banner_str}"
             })
         else:
-            steps.append({
+            record_step({
                 "layer_id": "SSH_BANNER",
                 "title_fa": "مذاکره پروتکل SSH و بنر سرور",
                 "title_en": "SSH Protocol Handshake & Banner",
@@ -227,7 +237,7 @@ def run_end_to_end_diagnostic(
                 raw_socket.close()
             except Exception:
                 pass
-        steps.append({
+        record_step({
             "layer_id": "SSH_BANNER",
             "title_fa": "مذاکره پروتکل SSH",
             "title_en": "SSH Protocol Handshake",
@@ -271,7 +281,7 @@ def run_end_to_end_diagnostic(
                 pkey = paramiko.RSAKey.from_private_key(key_file, password=device.passphrase)
             connect_kwargs["pkey"] = pkey
         except Exception as key_err:
-            steps.append({
+            record_step({
                 "layer_id": "PARAMIKO_AUTH",
                 "title_fa": "احراز هویت با کلید خصوصی SSH",
                 "title_en": "SSH Private Key Authentication",
@@ -299,7 +309,7 @@ def run_end_to_end_diagnostic(
         remote_kex_engine = getattr(transport, "kex_engine", None)
         remote_kex = type(remote_kex_engine).__name__ if remote_kex_engine else getattr(transport, "host_key_type", "SSH-2")
 
-        steps.append({
+        record_step({
             "layer_id": "PARAMIKO_AUTH",
             "title_fa": f"احراز هویت SSH کاربر «{device.username}» (موفق)",
             "title_en": f"SSH User Authentication '{device.username}' (Passed)",
@@ -310,7 +320,7 @@ def run_end_to_end_diagnostic(
         })
 
     except paramiko.AuthenticationException as auth_err:
-        steps.append({
+        record_step({
             "layer_id": "PARAMIKO_AUTH",
             "title_fa": f"احراز هویت SSH کاربر «{device.username}»",
             "title_en": f"SSH User Authentication '{device.username}'",
@@ -328,7 +338,7 @@ def run_end_to_end_diagnostic(
             "target_port": device.port
         }
     except paramiko.SSHException as ssh_err:
-        steps.append({
+        record_step({
             "layer_id": "PARAMIKO_AUTH",
             "title_fa": "مذاکره پروتکل و سایفرهای رمزنگاری SSH",
             "title_en": "SSH Cipher & Protocol Negotiation",
@@ -346,7 +356,7 @@ def run_end_to_end_diagnostic(
             "target_port": device.port
         }
     except Exception as conn_err:
-        steps.append({
+        record_step({
             "layer_id": "PARAMIKO_AUTH",
             "title_fa": "اتصال کلاینت پارامیکو به دیوایس",
             "title_en": "Paramiko Client Connection",
@@ -372,7 +382,7 @@ def run_end_to_end_diagnostic(
         chan.close()
         client.close()
 
-        steps.append({
+        record_step({
             "layer_id": "PTY_ALLOCATION",
             "title_fa": f"تخصیص شل اینتراکتیو و ترمینال مجازی ({device.pty_type or 'xterm-256color'})",
             "title_en": f"Interactive PTY Shell Allocation ({device.pty_type or 'xterm-256color'})",
@@ -382,7 +392,7 @@ def run_end_to_end_diagnostic(
             "details_en": "PTY pseudo-terminal session initialized successfully for interactive terminal."
         })
     except Exception as pty_err:
-        steps.append({
+        record_step({
             "layer_id": "PTY_ALLOCATION",
             "title_fa": "تخصیص شل اینتراکتیو و ترمینال مجازی",
             "title_en": "Interactive PTY Shell Allocation",

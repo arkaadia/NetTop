@@ -2,6 +2,8 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import http from 'http';
+import url from 'url';
+import { WebSocketServer } from 'ws';
 import { createServer as createViteServer } from 'vite';
 import {
   testRealSshConnection,
@@ -529,11 +531,42 @@ async function startServer() {
   // Create unified HTTP server for Express and WebSocket
   const server = http.createServer(app);
 
-  // Initialize interactive SSH and Telnet WebSocket gateways
-  setupSshWebSocketServer(server);
-  setupTelnetWebSocketServer(server);
-  setupRemoteDesktopWebSocketServer(server);
-  setupSshTestWebSocketServer(server);
+  // Initialize individual WebSocket servers with noServer to avoid upgrade route hijacking
+  const sshWss = new WebSocketServer({ noServer: true });
+  const telnetWss = new WebSocketServer({ noServer: true });
+  const rdpWss = new WebSocketServer({ noServer: true });
+  const sshTestWss = new WebSocketServer({ noServer: true });
+
+  server.on('upgrade', (request, socket, head) => {
+    const parsed = url.parse(request.url || '');
+    const pathname = parsed.pathname;
+
+    if (pathname === '/ws/ssh') {
+      sshWss.handleUpgrade(request, socket, head, (ws) => {
+        sshWss.emit('connection', ws, request);
+      });
+    } else if (pathname === '/ws/ssh-test') {
+      sshTestWss.handleUpgrade(request, socket, head, (ws) => {
+        sshTestWss.emit('connection', ws, request);
+      });
+    } else if (pathname === '/ws/telnet') {
+      telnetWss.handleUpgrade(request, socket, head, (ws) => {
+        telnetWss.emit('connection', ws, request);
+      });
+    } else if (pathname === '/ws/remote-desktop') {
+      rdpWss.handleUpgrade(request, socket, head, (ws) => {
+        rdpWss.emit('connection', ws, request);
+      });
+    } else {
+      socket.destroy();
+    }
+  });
+
+  // Attach respective handlers
+  setupSshWebSocketServer(sshWss);
+  setupTelnetWebSocketServer(telnetWss);
+  setupRemoteDesktopWebSocketServer(rdpWss);
+  setupSshTestWebSocketServer(sshTestWss);
 
   const HOST = process.env.HOST || '0.0.0.0';
   server.listen(PORT, HOST, () => {

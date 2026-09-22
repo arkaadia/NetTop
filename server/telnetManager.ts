@@ -239,11 +239,10 @@ export function testRealTelnetConnection(params: TelnetTestParams): Promise<Teln
 /**
  * Configure WebSocket server on `/ws/telnet` to provide a real interactive raw Telnet terminal session
  */
-export function setupTelnetWebSocketServer(server: http.Server) {
-  const wss = new WebSocketServer({
-    server,
-    path: '/ws/telnet'
-  });
+export function setupTelnetWebSocketServer(server: http.Server | WebSocketServer) {
+  const wss = server instanceof WebSocketServer
+    ? server
+    : new WebSocketServer({ server, path: '/ws/telnet' });
 
   console.log('[Telnet Server] WebSocket Telnet interactive gateway initialized on path /ws/telnet');
 

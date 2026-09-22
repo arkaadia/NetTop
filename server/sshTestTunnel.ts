@@ -52,11 +52,10 @@ async function fetchCredentialsByToken(token: string): Promise<SshSessionCredent
 /**
  * Configure WebSocket server on `/ws/ssh-test` backed by genuine Paramiko 2 Python engine.
  */
-export function setupSshTestWebSocketServer(server: http.Server) {
-  const wss = new WebSocketServer({
-    server,
-    path: '/ws/ssh-test'
-  });
+export function setupSshTestWebSocketServer(server: http.Server | WebSocketServer) {
+  const wss = server instanceof WebSocketServer
+    ? server
+    : new WebSocketServer({ server, path: '/ws/ssh-test' });
 
   const getCurrentDir = () => (typeof __dirname !== 'undefined' ? __dirname : process.cwd());
   const currentDir = getCurrentDir();
@@ -71,12 +70,110 @@ export function setupSshTestWebSocketServer(server: http.Server) {
     const initialRows = parseInt((parsedUrl.query.rows as string) || '30', 10);
 
     if (!token) {
+      // Diagnostic & Ad-Hoc Test Mode via WebSocket (Engine: Python Paramiko 2)
       ws.send(JSON.stringify({
-        type: 'error',
-        message: 'توکن دسترسی معتبر برای برقراری ارتباط ترمینال ارائه نشده است.',
-        message_en: 'Session token required.'
+        type: 'ready',
+        mode: 'diagnostic',
+        engine: 'Python Paramiko 2',
+        message: 'درگاه وب‌سوکت برای آزمون اتصال و عیب‌یابی لایه‌ای با هسته Paramiko 2 آماده است.',
+        message_en: 'WebSocket gateway ready for layered diagnostic test with Paramiko 2.'
       }));
-      ws.close(1008, 'Token required');
+
+      let diagWorker: ChildProcessWithoutNullStreams | null = null;
+      let isDiagTerminated = false;
+
+      const cleanupDiag = () => {
+        if (isDiagTerminated) return;
+        isDiagTerminated = true;
+        if (diagWorker) {
+          try { diagWorker.kill('SIGTERM'); } catch {}
+          diagWorker = null;
+        }
+      };
+
+      ws.on('message', (msgData: any) => {
+        try {
+          const str = msgData.toString();
+          const parsed = JSON.parse(str);
+          if (parsed.action === 'test_connection' || parsed.action === 'diagnose_adhoc' || parsed.type === 'test_connection') {
+            const payload = parsed.payload || parsed;
+
+            ws.send(JSON.stringify({
+              type: 'status',
+              status: 'starting',
+              message: `در حال فراخوانی موتور Paramiko 2 برای تست ارتباط با ${payload.host || 'دیوایس'}...`
+            }));
+
+            const pythonCmd = process.env.PYTHON_CMD || (process.platform === 'win32' ? 'python' : 'python3');
+
+            diagWorker = spawn(pythonCmd, ['-m', 'backend.ssh_test.diag_worker'], {
+              cwd: projectRoot,
+              stdio: ['pipe', 'pipe', 'pipe'],
+              env: {
+                ...process.env,
+                PYTHONUNBUFFERED: '1'
+              }
+            });
+
+            diagWorker.on('error', (err) => {
+              console.error('[SSH Test Diag Worker] Failed to start Python diag worker:', err);
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                  type: 'error',
+                  message: `خطای راه‌اندازی ورکر پایتون پارامیکو: ${err.message}`
+                }));
+              }
+              cleanupDiag();
+            });
+
+            let diagBuffer = '';
+            diagWorker.stdout.on('data', (chunk: Buffer) => {
+              diagBuffer += chunk.toString('utf-8');
+              const lines = diagBuffer.split('\n');
+              diagBuffer = lines.pop() || '';
+
+              for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+                try {
+                  const eventObj = JSON.parse(trimmed);
+                  if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify(eventObj));
+                  }
+                } catch {
+                  // Ignore non-json lines
+                }
+              }
+            });
+
+            diagWorker.stderr.on('data', (chunk: Buffer) => {
+              console.warn(`[Paramiko Diag Stderr] ${chunk.toString('utf-8').trim()}`);
+            });
+
+            diagWorker.on('exit', () => {
+              cleanupDiag();
+            });
+
+            // Write payload to diagWorker stdin
+            diagWorker.stdin.write(JSON.stringify(payload) + '\n');
+            diagWorker.stdin.end();
+          } else if (parsed.type === 'ping') {
+            ws.send(JSON.stringify({ type: 'pong' }));
+          }
+        } catch (e: any) {
+          console.error('[SSH Test WS] Error handling message in diagnostic mode:', e);
+        }
+      });
+
+      ws.on('close', () => {
+        cleanupDiag();
+      });
+
+      ws.on('error', (err) => {
+        console.warn('[SSH Test WS] Diagnostic socket error:', err);
+        cleanupDiag();
+      });
+
       return;
     }
 

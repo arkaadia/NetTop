@@ -346,12 +346,25 @@ npm start
 │               │                        │ ├── Telemetry Collector       │
 │               │                        │ └── Encrypted Vault (AES-CBC) │
 │               │                        │                               │
+│  Add Device   │ ── WS: /ws/ssh-test ──>│ Node.js WS Bridge (Upgrade)   │
+│  Test Connect │   (mode=diagnostic)    │ └── Spawns diag_worker.py     │
+│  (Live Stream)│ <── Stdio JSON Lines ─ │     └── Paramiko 2 KEX Patch  │
+│               │                        │         └── Real Socket (:22) │
+│               │                        │                               │
 │  Interactive  │ ── WS: /ws/ssh-test ──>│ Node.js WS Bridge             │
-│  Terminal     │                        │ └── Spawns terminal_worker.py │
+│  Terminal     │   (session token)      │ └── Spawns terminal_worker.py │
 │  (ANSI/PTY)   │ <── Stdio JSON Stream─ │     └── Paramiko invoke_shell │
 │               │                        │         └── Target Node (:22) │
 └───────────────┴────────────────────────┴───────────────────────────────┘
 ```
+
+#### قابلیت‌های ویژه آزمون اتصال و رفع خطای مذاکره KEX در سوئیچ‌های سیسکو
+- **ارتباط زنده وب‌سوکت در مد آزمون (`mode=diagnostic`):** در پنجره افزودن دیوایس جدید (`Add SSH Device Modal`)، کلیک بر روی «آزمون ارتباط زنده» به جای درخواست‌های سنتی، یک کانکشن استریمینگ روی `/ws/ssh-test?mode=diagnostic` باز کرده و فرآیند ارزیابی لایه‌ای را مستقیماً از طریق اسکریپت ورکر اختصاصی `diag_worker.py` با هسته Paramiko 2 اجرا می‌کند.
+- **حل قطعی خطای `Incompatible ssh peer (no acceptable kex algorithm)`:**
+  - با پیاده‌سازی مکانیزم هوشمند `kex_patch.py` و `CiscoCompatibleTransport`، هوک‌های مذاکره الگوریتم‌های تبادل کلید در لایه انتقال Paramiko تزریق می‌شوند.
+  - پشتیبانی کامل از الگوریتم‌های سنتی سوئیچ‌های سیسکو کاتالیست و آی‌او‌اس قدیمی (شامل `diffie-hellman-group1-sha1`, `diffie-hellman-group14-sha1`, `diffie-hellman-group-exchange-sha1`) به همراه سایفرهای `aes256-cbc`, `aes128-cbc`, `3des-cbc` و کدهای صحت‌سنجی پیام (`hmac-sha1`, `hmac-sha1-96`) فعال است.
+  - سیستم در صورت مواجهه با پیام اعلان اولیه سوئیچ، الگوریتم درخواستی سخت‌افزار را به صورت تطبیقی (Adaptive KEX Negotiation) فعال و اتصال را بدون وقفه نهایی می‌کند.
+- **بدون هرگونه دیتای ماک (Zero Mock Data):** کلیه داده‌ها، زمان‌های تاخیر (Latency ms)، بنر پروتکل و الگوریتم‌های تبادل کلید مستقیماً از سوکت واقعی خوانده شده و به صورت بلادرنگ به کاربر گزارش می‌شوند.
 
 ### پیش‌نیازهای سیستمی
 - پایتون ۳ نسخه 3.8 یا بالاتر (`python3`)
@@ -772,12 +785,25 @@ The **SSH Test** module provides an unsimulated, authentic terminal connection, 
 │               │                        │ ├── Telemetry Collector       │
 │               │                        │ └── Encrypted Vault (AES-CBC) │
 │               │                        │                               │
+│  Add Device   │ ── WS: /ws/ssh-test ──>│ Node.js WS Bridge (Upgrade)   │
+│  Test Connect │   (mode=diagnostic)    │ └── Spawns diag_worker.py     │
+│  (Live Stream)│ <── Stdio JSON Lines ─ │     └── Paramiko 2 KEX Patch  │
+│               │                        │         └── Real Socket (:22) │
+│               │                        │                               │
 │  Interactive  │ ── WS: /ws/ssh-test ──>│ Node.js WS Bridge             │
-│  Terminal     │                        │ └── Spawns terminal_worker.py │
+│  Terminal     │   (session token)      │ └── Spawns terminal_worker.py │
 │  (ANSI/PTY)   │ <── Stdio JSON Stream─ │     └── Paramiko invoke_shell │
 │               │                        │         └── Target Node (:22) │
 └───────────────┴────────────────────────┴───────────────────────────────┘
 ```
+
+#### Diagnostic WebSocket Stream & Cisco KEX Fix Highlights
+- **Direct WebSocket Diagnostic Mode (`mode=diagnostic`):** In the "Add SSH Device" modal, clicking **Test Connection** opens a direct streaming WebSocket channel to `/ws/ssh-test?mode=diagnostic`. It executes the diagnostic worker (`diag_worker.py`) backed by the Python Paramiko 2 engine with live step-by-step progress.
+- **Definitive Fix for `Incompatible ssh peer (no acceptable kex algorithm)`:**
+  - Employs `kex_patch.py` and `CiscoCompatibleTransport` to inject adaptive KEX hooks into the Paramiko transport layer.
+  - Full bidirectional support for both legacy Cisco/MikroTik algorithms (`diffie-hellman-group1-sha1`, `diffie-hellman-group14-sha1`, `diffie-hellman-group-exchange-sha1`) and modern curves (`curve25519-sha256`, `ecdh-sha2-nistp256/384/521`).
+  - Adaptive negotiation transparently intercepts peer KEX initialization packets and enables required algorithms dynamically on the fly.
+- **Zero Mock Data Constraint:** Real TCP handshake, real SSH protocol banner, authentic cryptographic negotiation, and live command execution.
 
 ### System Prerequisites
 - Python 3.8 or higher (`python3`)

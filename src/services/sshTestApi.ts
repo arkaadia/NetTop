@@ -1,4 +1,4 @@
-import { SshTestDevice, DiagnosticReport, SshFetchedData, SshHealthStatus } from '../types/sshTest';
+import { SshTestDevice, DiagnosticReport, DiagnosticStep, SshFetchedData, SshHealthStatus } from '../types/sshTest';
 
 export async function getSshDevices(): Promise<SshTestDevice[]> {
   const res = await fetch('/api/ssh-test/devices');
@@ -87,6 +87,7 @@ export async function testConnectionAdHoc(payload: {
   password?: string;
   private_key?: string;
   auth_type?: string;
+  passphrase?: string;
 }): Promise<DiagnosticReport> {
   const res = await fetch('/api/ssh-test/test-connection', {
     method: 'POST',
@@ -98,6 +99,100 @@ export async function testConnectionAdHoc(payload: {
     throw new Error(data.error || 'Connection test failed');
   }
   return data;
+}
+
+/**
+ * Connects directly via WebSocket to the Python Paramiko 2 engine for live streaming diagnostic test.
+ * Falls back transparently to HTTP if WebSocket cannot be established.
+ */
+export function testConnectionViaWebSocket(
+  payload: {
+    host: string;
+    port: number;
+    username: string;
+    password?: string;
+    private_key?: string;
+    auth_type?: string;
+    passphrase?: string;
+    timeout?: number;
+  },
+  onProgress?: (step: DiagnosticStep) => void
+): Promise<DiagnosticReport> {
+  return new Promise((resolve, reject) => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws/ssh-test?mode=diagnostic`;
+    let ws: WebSocket | null = null;
+    let isSettled = false;
+
+    const timer = setTimeout(() => {
+      if (!isSettled) {
+        isSettled = true;
+        if (ws) {
+          try { ws.close(); } catch {}
+        }
+        testConnectionAdHoc(payload).then(resolve).catch(reject);
+      }
+    }, (payload.timeout || 15) * 1000 + 4000);
+
+    try {
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        ws?.send(JSON.stringify({
+          action: 'test_connection',
+          payload
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'layer_progress' && msg.step) {
+            onProgress?.(msg.step);
+          } else if (msg.type === 'diagnostic_result' && msg.report) {
+            if (!isSettled) {
+              isSettled = true;
+              clearTimeout(timer);
+              try { ws?.close(); } catch {}
+              resolve(msg.report);
+            }
+          } else if (msg.type === 'error') {
+            if (!isSettled) {
+              isSettled = true;
+              clearTimeout(timer);
+              try { ws?.close(); } catch {}
+              reject(new Error(msg.message || 'WebSocket diagnostic error'));
+            }
+          }
+        } catch {
+          // ignore parsing error
+        }
+      };
+
+      ws.onerror = () => {
+        if (!isSettled) {
+          isSettled = true;
+          clearTimeout(timer);
+          try { ws?.close(); } catch {}
+          testConnectionAdHoc(payload).then(resolve).catch(reject);
+        }
+      };
+
+      ws.onclose = () => {
+        if (!isSettled) {
+          isSettled = true;
+          clearTimeout(timer);
+          testConnectionAdHoc(payload).then(resolve).catch(reject);
+        }
+      };
+    } catch {
+      if (!isSettled) {
+        isSettled = true;
+        clearTimeout(timer);
+        testConnectionAdHoc(payload).then(resolve).catch(reject);
+      }
+    }
+  });
 }
 
 export async function createSessionToken(id: string): Promise<string> {

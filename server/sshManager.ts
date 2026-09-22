@@ -222,11 +222,10 @@ export function testRealSshConnection(params: SshTestParams): Promise<SshTestRes
 /**
  * Configure WebSocket server on `/ws/ssh` to provide a real interactive pseudo-terminal session
  */
-export function setupSshWebSocketServer(server: http.Server) {
-  const wss = new WebSocketServer({
-    server,
-    path: '/ws/ssh'
-  });
+export function setupSshWebSocketServer(server: http.Server | WebSocketServer) {
+  const wss = server instanceof WebSocketServer
+    ? server
+    : new WebSocketServer({ server, path: '/ws/ssh' });
 
   console.log('[SSH Server] WebSocket SSH interactive gateway initialized on path /ws/ssh');
 

@@ -34,11 +34,15 @@ def handle_ssh_test_request(method: str, path: str, body: dict = None, query: di
     if method == "POST" and clean_path == "/api/ssh-test/test-connection":
         from .models import SshTestDevice
         from .diagnostic import run_end_to_end_diagnostic
+        from .kex_patch import configure_paramiko_security
+        configure_paramiko_security()
+
         host = body.get("host", "").strip()
         username = body.get("username", "").strip()
         port = int(body.get("port", 22))
         password = body.get("password", "")
         private_key = body.get("private_key", "")
+        passphrase = body.get("passphrase", "")
         auth_type = body.get("auth_type", "password")
 
         if not host or not username:
@@ -49,7 +53,8 @@ def handle_ssh_test_request(method: str, path: str, body: dict = None, query: di
             host=host,
             port=port,
             username=username,
-            auth_type=auth_type
+            auth_type=auth_type,
+            passphrase=passphrase
         )
         report = run_end_to_end_diagnostic(dummy_dev, plain_password=password, plain_key=private_key)
         return 200, report

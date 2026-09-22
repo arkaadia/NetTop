@@ -91,11 +91,10 @@ async function fetchSessionByToken(token: string): Promise<RemoteSessionData | n
 /**
  * Configure WebSocket server on `/ws/remote-desktop` to provide a real Guacamole RDP tunnel
  */
-export function setupRemoteDesktopWebSocketServer(server: http.Server) {
-  const wss = new WebSocketServer({
-    server,
-    path: '/ws/remote-desktop'
-  });
+export function setupRemoteDesktopWebSocketServer(server: http.Server | WebSocketServer) {
+  const wss = server instanceof WebSocketServer
+    ? server
+    : new WebSocketServer({ server, path: '/ws/remote-desktop' });
 
   const guacdHost = process.env.GUACD_HOST || '127.0.0.1';
   const guacdPort = parseInt(process.env.GUACD_PORT || '4822', 10);

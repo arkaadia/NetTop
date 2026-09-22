@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../../i18n';
 import { SshTestDevice } from '../../types/sshTest';
-import { createSshDevice, updateSshDevice, testConnectionAdHoc } from '../../services/sshTestApi';
+import { createSshDevice, updateSshDevice, testConnectionViaWebSocket } from '../../services/sshTestApi';
 
 interface SshDeviceModalProps {
   isOpen: boolean;
@@ -51,8 +51,9 @@ export const SshDeviceModal: React.FC<SshDeviceModalProps> = ({
   const [showPassphrase, setShowPassphrase] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  const [liveStage, setLiveStage] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<{ status: 'passed' | 'failed'; message: string } | null>(null);
+  const [testResult, setTestResult] = useState<{ status: 'passed' | 'failed'; message: string; details?: string } | null>(null);
 
   useEffect(() => {
     if (device) {
@@ -82,6 +83,7 @@ export const SshDeviceModal: React.FC<SshDeviceModalProps> = ({
     }
     setErrorMsg(null);
     setTestResult(null);
+    setLiveStage(null);
   }, [device, isOpen]);
 
   if (!isOpen) return null;
@@ -94,29 +96,40 @@ export const SshDeviceModal: React.FC<SshDeviceModalProps> = ({
     setIsTesting(true);
     setErrorMsg(null);
     setTestResult(null);
+    setLiveStage(isRtl ? 'در حال برقراری اتصال به وب‌سوکت و هسته Paramiko 2...' : 'Connecting to WebSocket & Paramiko 2 engine...');
 
     try {
-      const report = await testConnectionAdHoc({
-        host: host.trim(),
-        port: Number(port) || 22,
-        username: username.trim(),
-        auth_type: authType,
-        password: password,
-        private_key: privateKey
-      });
+      const report = await testConnectionViaWebSocket(
+        {
+          host: host.trim(),
+          port: Number(port) || 22,
+          username: username.trim(),
+          auth_type: authType,
+          password: password,
+          private_key: privateKey,
+          passphrase: passphrase
+        },
+        (step) => {
+          setLiveStage(isRtl ? step.title_fa : step.title_en);
+        }
+      );
 
       if (report.overall_status === 'passed') {
+        const authStep = report.steps.find(s => s.layer_id === 'PARAMIKO_AUTH');
+        const tcpStep = report.steps.find(s => s.layer_id === 'TCP_LAYER');
         setTestResult({
           status: 'passed',
           message: isRtl
-            ? `اتصال و احراز هویت با موفقیت انجام شد (زمان پاسخ: ${report.steps.find(s => s.layer_id === 'TCP_LAYER')?.latency_ms || 0}ms)`
-            : `Connection & authentication succeeded! (RTT: ${report.steps.find(s => s.layer_id === 'TCP_LAYER')?.latency_ms || 0}ms)`
+            ? `اتصال و احراز هویت با موفقیت انجام شد (زمان پاسخ: ${tcpStep?.latency_ms || 0}ms)`
+            : `Connection & authentication succeeded! (RTT: ${tcpStep?.latency_ms || 0}ms)`,
+          details: authStep?.details || authStep?.details_en
         });
       } else {
         const failedStep = report.steps.find(s => s.status === 'failed');
         setTestResult({
           status: 'failed',
-          message: failedStep?.error || (isRtl ? 'برقراری اتصال در یکی از لایه‌ها متوقف شد.' : 'Connection test failed.')
+          message: failedStep?.error || (isRtl ? 'برقراری اتصال در یکی از لایه‌ها متوقف شد.' : 'Connection test failed.'),
+          details: isRtl ? failedStep?.remediation_fa : failedStep?.remediation_en
         });
       }
     } catch (err: any) {
@@ -126,6 +139,7 @@ export const SshDeviceModal: React.FC<SshDeviceModalProps> = ({
       });
     } finally {
       setIsTesting(false);
+      setLiveStage(null);
     }
   };
 
@@ -213,18 +227,37 @@ export const SshDeviceModal: React.FC<SshDeviceModalProps> = ({
             </div>
           )}
 
+          {isTesting && liveStage && (
+            <div className="p-3 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-200 text-xs flex items-center justify-between gap-2 animate-pulse">
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 shrink-0 animate-spin text-cyan-400" />
+                <span className="font-medium">{liveStage}</span>
+              </div>
+              <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-mono">
+                WebSocket / Paramiko 2
+              </span>
+            </div>
+          )}
+
           {testResult && (
-            <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
+            <div className={`p-3 rounded-xl border text-xs flex flex-col gap-1.5 ${
               testResult.status === 'passed'
                 ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
                 : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
             }`}>
-              {testResult.status === 'passed' ? (
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-              ) : (
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+              <div className="flex items-center gap-2 font-medium">
+                {testResult.status === 'passed' ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                )}
+                <span>{testResult.message}</span>
+              </div>
+              {testResult.details && (
+                <div className={`text-[11px] pl-6 font-mono ${testResult.status === 'passed' ? 'text-emerald-400/90' : 'text-rose-300/90'}`}>
+                  {testResult.details}
+                </div>
               )}
-              <span>{testResult.message}</span>
             </div>
           )}
 
