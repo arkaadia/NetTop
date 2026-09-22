@@ -19,6 +19,7 @@ import { ModuleWorkflowModal } from './components/ModuleWorkflowModal';
 import { ComponentWorkflowModal } from './components/ComponentWorkflowModal';
 import { NetworkAutomationView } from './components/automation/NetworkAutomationView';
 import { RemoteDesktopView } from './components/remoteDesktop/RemoteDesktopView';
+import { SshTestView } from './components/sshTest/SshTestView';
 import { useWorkflow } from './context/WorkflowContext';
 import { Workflow } from 'lucide-react';
 import { APP_VERSION } from './version';
@@ -39,8 +40,9 @@ import { useLanguage } from './i18n';
 export default function App() {
   const { t, isRtl, isEn } = useLanguage();
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
-    if (typeof window !== 'undefined' && window.location.pathname === '/remote-test') {
-      return 'remote-test';
+    if (typeof window !== 'undefined') {
+      if (window.location.pathname === '/remote-test') return 'remote-test';
+      if (window.location.pathname === '/ssh-test') return 'ssh-test';
     }
     return 'dashboard';
   });
@@ -50,7 +52,9 @@ export default function App() {
     const handlePopState = () => {
       if (window.location.pathname === '/remote-test') {
         setActiveTab('remote-test');
-      } else if (activeTab === 'remote-test') {
+      } else if (window.location.pathname === '/ssh-test') {
+        setActiveTab('ssh-test');
+      } else if (activeTab === 'remote-test' || activeTab === 'ssh-test') {
         setActiveTab('dashboard');
       }
     };
@@ -418,6 +422,10 @@ export default function App() {
 
           {activeTab === 'remote-test' && (
             <RemoteDesktopView />
+          )}
+
+          {activeTab === 'ssh-test' && (
+            <SshTestView />
           )}
         </main>
       </div>

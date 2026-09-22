@@ -11,6 +11,7 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
   - [ویژگی‌ها و قابلیت‌های کلیدی](#ویژگیها-و-قابلیتهای-کلیدی)
   - [ساختار معماری و تکنولوژی‌ها](#ساختار-معماری-و-تکنولوژیها)
   - [راهنمای نصب اختصاصی ماژول Remote Test و ویندوز RDP](#راهنمای-نصب-اختصاصی-ماژول-remote-test-و-ویندوز-rdp)
+  - [راهنمای نصب اختصاصی ماژول SSH تست (Paramiko 2 و وب‌سوکت)](#راهنمای-نصب-اختصاصی-ماژول-ssh-تست-paramiko-2-و-وبسوکت)
   - [راهنمای نصب و راه‌اندازی کلی سامانه روی لینوکس](#راهنمای-نصب-و-راهاندازی-روی-لینوکس-linux-installation)
   - [اسکریپت‌های سیستمی](#اسکریپتهای-سیستمی)
   - [دستورالعمل توسعه و مشارکت هوش مصنوعی](#دستورالعمل-توسعه-و-مشارکت-هوش-مصنوعی)
@@ -19,6 +20,7 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
   - [Key Features](#key-features)
   - [System Architecture & Stack](#system-architecture--stack)
   - [Dedicated Remote Test (Windows RDP) Installation Guide](#dedicated-remote-test-windows-rdp-installation-guide)
+  - [Dedicated SSH Test (Paramiko 2 & WebSocket) Installation Guide](#dedicated-ssh-test-paramiko-2--websocket-installation-guide)
   - [General Installation & Setup (Linux)](#installation--setup-linux)
   - [System Scripts](#system-scripts)
   - [AI Agent Instructions](#ai-agent-instructions)
@@ -203,6 +205,29 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
   - دکمه **Test Connection** برای اعتبارسنجی زنده پورت TCP ۳۳۸۹ و محاسبه میلی‌ثانیه‌ای تاخیر قبل از ورود به سشن.
   - رمزنگاری کلیدهای عبور در بک‌اند با استاندارد PBKDF2 و AES-256 و محافظت از طریق توکن‌های موقت سشن ۶۰ ثانیه‌ای.
 
+### ۱۶. ماژول تست و عیب‌یابی SSH واقعی با Paramiko 2 و وب‌سوکت (Real SSH Testing, 8-Layer Diagnostic & Paramiko 2 Engine)
+- **ارتباط کاملاً واقعی بدون داده‌های فیک یا شبیه‌سازی:**
+  - اتصال مستقیم به تجهیزات واقعی لینوکس (Ubuntu, Debian, RHEL, CentOS)، روترها و سوئیچ‌های سیسکو (IOS / IOS-XE)، میکروتیک (MikroTik RouterOS) و سایر تجهیزات شبکه مبتنی بر SSHv2.
+- **موتور قدرتمند و مستقل پایتون با کتابخانه Paramiko 2.12.0:**
+  - پیاده‌سازی بک‌اند اختصاصی در مسیر `/backend/ssh_test/` به همراه مخزن مستقل `ssh_test_devices.json` با رمزنگاری پیشرفته کلیدهای عبور و کلیدهای خصوصی SSH با الگوریتم AES-CBC و توکن‌های نشست ۶۰ ثانیه‌ای موقت.
+- **سیستم ممیزی ۸ لایه فرانت تا بک‌اند (End-to-End 8-Layer Diagnostic Audit):**
+  - بررسی و تفکیک بلادرنگ تمامی لایه‌های ارتباطی:
+    1. **REST Gateway Bridge:** بررسی ارتباط مرورگر با درگاه Node.js و پراکسی پایتون
+    2. **Paramiko 2 Engine:** سلامت هسته پایتون و ماژول کریپتوگرافی
+    3. **WebSocket Tunnel Gateway:** بررسی آماده‌به‌کار بودن درگاه `/ws/ssh-test`
+    4. **DNS Resolution:** اعتبارسنجی رزولوشن نام هاست به آدرس IP واقعی
+    5. **TCP Network Layer & Socket Handshake:** برقراری اتصال TCP Socket به پورت ۲۲ (یا پورت سفارشی) و محاسبه میلی‌ثانیه‌ای تاخیر رفت و برگشت (RTT Latency)
+    6. **SSH Server Banner Exchange:** خواندن بنر واقعی پروتکل سرور (نظیر `SSH-2.0-OpenSSH_8.9p1`)
+    7. **Paramiko SSH Authentication & Cipher Negotiation:** اعتبارسنجی کلمه عبور یا کلید خصوصی و مذاکره سایفرهای رمزنگاری
+    8. **Interactive PTY Virtual Terminal Allocation:** بررسی امکان تخصیص پایانه مجازی تعاملی
+  - **شناسایی دقیق محل عیب و راهکار پیشنهادی:** در صورت بروز هرگونه اختلال، پنل ممیزی دقیقاً مشخص می‌کند که اختلال در کدام لایه رخ داده و متن خطای فنی، علت فارسی و انگلیسی و راهکار رفع مشکل (Remediation) را نمایش می‌دهد.
+- **قابلیت استخراج و فتچ زنده اطلاعات (Paramiko 2 Live Telemetry Fetching):**
+  - استخراج مشخصات سیستم‌عامل (OS & Platform)، هسته کرنل، مدت زمان دقیق روشن بودن (Uptime)، لیست کامل کارت‌های شبکه و وضعیت فیزیکی UP/DOWN، وضعیت حافظه RAM (کل، مصرف‌شده، آزاد)، فضای دیسک و مدل پردازنده (CPU) بدون کوچک‌ترین داده ماک.
+  - نمایش خروجی خام کلیه دستورات سیستمی اجرا شده همراه با امکان کپی مستقیم.
+- **ترمینال اینتراکتیو و تعاملی وب‌سوکت (Interactive WebSocket Terminal):**
+  - ارتباط دوطرفه زنده از طریق وب‌سوکت `/ws/ssh-test` و ورکر پایتون `terminal_worker.py`.
+  - پشتیبانی کامل از کلیدهای کنترلی شل (Ctrl+C جهت ارسال SIGINT، Ctrl+D برای EOF، کلید Tab برای Auto-Complete، تاریخچه دستورات با کلیدهای جهت‌نما، نوار ابزار دستورات سریع و پشتیبانی از تمایز رنگی کدهای ANSI).
+
 ---
 
 ## ساختار معماری و تکنولوژی‌ها
@@ -296,6 +321,87 @@ npm start
    ```
 3. **دسترسی کاربر:** حساب کاربری دارای کلمه عبور بوده و عضو گروه `Remote Desktop Users` یا `Administrators` باشد.
 4. **تست پورت با پنل:** در تب **Remote Test**، کلید **[Test Connection]** را بزنید تا تاخیر و وضعیت پورت ۳۳۸۹ اعتبارسنجی شود.
+
+---
+
+## راهنمای نصب اختصاصی ماژول SSH تست (Paramiko 2 و وب‌سوکت)
+
+ماژول **SSH Test** برای ارتباط بلادرنگ، امن و کاملاً واقعی با سرورها و سوئیچ‌ها از کتابخانه استاندارد **Paramiko 2.12.0** و درگاه دوطرفه **WebSocket** بهره می‌برد. تمامی سناریوهای اتصال، ممیزی ۸ لایه و شل اینتراکتیو مبتنی بر سوکت‌های زنده شبکه بوده و بدون هرگونه داده ماک یا ساختگی عمل می‌کنند.
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        معماری ماژول SSH Test                           │
+├───────────────┬────────────────────────┬───────────────────────────────┤
+│  مرورگر کاربر │      Node.js Server    │     Python 3 Backend Engine   │
+│  (React UI)   │       (Port 3000)      │           (Port 5001)         │
+├───────────────┼────────────────────────┼───────────────────────────────┤
+│  SshTestView  │                        │                               │
+│  Diagnostic   │ ── REST API Proxy ───> │ Flask Router / Controller     │
+│  FetchedData  │                        │ ├── 8-Layer Diagnostic Engine │
+│               │                        │ ├── Telemetry Collector       │
+│               │                        │ └── Encrypted Vault (AES-CBC) │
+│               │                        │                               │
+│  Interactive  │ ── WS: /ws/ssh-test ──>│ Node.js WS Bridge             │
+│  Terminal     │                        │ └── Spawns terminal_worker.py │
+│  (ANSI/PTY)   │ <── Stdio JSON Stream─ │     └── Paramiko invoke_shell │
+│               │                        │         └── Target Node (:22) │
+└───────────────┴────────────────────────┴───────────────────────────────┘
+```
+
+### پیش‌نیازهای سیستمی
+- پایتون ۳ نسخه 3.8 یا بالاتر (`python3`)
+- مدیر بسته پایتون (`python3-pip`)
+- ابزارهای بیلد سیستم‌عامل (جهت کامپایل پکیج‌های رمزنگاری C):
+  ```bash
+  # روی اوبونتو / دبیان:
+  sudo apt update
+  sudo apt install -y python3 python3-pip python3-dev build-essential libssl-dev libffi-dev
+
+  # روی RHEL / CentOS / AlmaLinux:
+  sudo dnf install -y python3 python3-pip python3-devel gcc openssl-devel libffi-devel
+  ```
+
+### ۱. نصب وابستگی‌های پایتون (Paramiko 2)
+در پوشه اصلی پروژه، دستور زیر را اجرا کنید:
+```bash
+# نصب پکیج‌های اختصاصی ماژول با نسخه‌های تست‌شده:
+pip3 install -r backend/requirements.txt
+
+# یا نصب مستقیم به صورت مستقل:
+pip3 install "paramiko>=2.12.0,<3.0.0" "cryptography>=3.4.8" "websockets>=10.0" flask requests
+```
+
+> **بررسی صحت نصب Paramiko 2:**
+> ```bash
+> python3 -c "import paramiko, cryptography; print(f'Paramiko: {paramiko.__version__}, Crypto: {cryptography.__version__}')"
+> # خروجی مورد انتظار: Paramiko: 2.12.0
+> ```
+
+### ۲. تنظیم متغیرهای محیطی امنیتی (اختیاری)
+کلید مستر جهت رمزنگاری کلمات عبور و کلیدهای خصوصی در فایل `.env`:
+```env
+# کلید رمزنگاری محفظه مشخصات SSH (در صورت عدم تعیین، یک کلید تصادفی ایجاد می‌شود)
+SSH_TEST_SECRET_KEY=your-custom-master-passphrase-32-chars-minimum
+PYTHON_PORT=5001
+```
+
+### ۳. بررسی پورت‌های فایروال و شبکه
+- اطمینان حاصل کنید که پورت `TCP 22` (یا پورت اختصاصی SSH دیوایس هدف) از سمت سرور NetTopology در دسترس است:
+  ```bash
+  nc -zv -w 3 192.168.1.1 22
+  ```
+- در صورت استفاده از کلید خصوصی (Private Key)، کلید باید با فرمت استاندارد OpenSSH یا RSA (مانند `-----BEGIN RSA PRIVATE KEY-----` یا `-----BEGIN OPENSSH PRIVATE KEY-----`) در پنل وارد شود.
+
+### ۴. راه‌اندازی و اجرای سامانه
+```bash
+# اجرای خودکار همزمان فرانت‌اند و بک‌اند:
+npm run dev
+
+# یا در محیط عملیاتی:
+npm run build
+npm start
+```
+سپس از منوی سایدبار گزینه **ssh تست** را انتخاب کرده، تجهیز مورد نظر را با آدرس IP و مشخصات ورود اضافه کنید و دکمه **[بررسی ارتباط فرانت تا بک‌اند]** را جهت اجرای تست ۸ لایه اجرا نمایید.
 
 ---
 
@@ -527,6 +633,27 @@ npm start
   - Real **Test Connection** button verifying TCP 3389 socket accessibility and millisecond latency before starting the session.
   - Server-side credential encryption (PBKDF2-HMAC-SHA256 authenticated vault) with short-lived 60-second session handshake tokens.
 
+### 16. Real SSH Testing, 8-Layer Diagnostic & Paramiko 2 Engine
+- **100% Genuine SSH Connections with Zero Mock Data:**
+  - Direct, unsimulated SSHv2 connections to physical Linux servers, Cisco routers/switches, MikroTik RouterOS appliances, and generic SSH network devices.
+- **Isolated Python Paramiko 2.12.0 Backend Architecture:**
+  - Self-contained microservice under `/backend/ssh_test/` using an encrypted device credentials vault (`ssh_test_devices.json`) protected with AES-CBC and one-time 60-second session tokens.
+- **Comprehensive 8-Layer End-to-End Diagnostic Audit:**
+  - Step-by-step diagnostic verification from client browser to remote hardware:
+    1. **Frontend REST Gateway Bridge:** Validates HTTP communication between React, Node.js, and Python router.
+    2. **Paramiko 2 Engine Health:** Asserts Python runtime, Paramiko 2.12.0, and cryptography library readiness.
+    3. **WebSocket Tunnel Gateway:** Confirms the `/ws/ssh-test` streaming gateway is active.
+    4. **DNS Hostname Resolution:** Verifies target hostname resolves to an authentic IP address.
+    5. **TCP Network Socket Handshake:** Measures real round-trip latency (ms) to port 22 or custom port.
+    6. **SSH Server Protocol Banner:** Captures and inspects the remote daemon's identification string (e.g. `SSH-2.0-OpenSSH_8.9p1`).
+    7. **Paramiko Authentication & Cipher Negotiation:** Tests password or RSA/OpenSSH private key against target.
+    8. **Interactive PTY Virtual Terminal Allocation:** Verifies pseudo-terminal allocation capability.
+  - **Pinpoint Root-Cause Analysis & Remediation:** If any layer fails, the audit isolates the exact failure point and provides actionable technical recommendations in both English and Persian.
+- **Live Hardware Telemetry Fetching (Paramiko 2 Engine):**
+  - Extracts authentic OS kernel version, live uptime, physical network interfaces (UP/DOWN flags, IP/MAC), RAM memory statistics, disk storage partitions, and raw command outputs directly from the target machine.
+- **Bidirectional WebSocket Interactive Terminal:**
+  - Low-latency interactive PTY session via `/ws/ssh-test` with full ANSI color decoding, Ctrl+C / Ctrl+D signaling, Tab completion, arrow-key command history, and quick command macros.
+
 ---
 
 ## System Architecture & Stack
@@ -615,6 +742,87 @@ To ensure seamless RDP connectivity:
    ```
 3. **User Permissions:** Verify your Windows user account has a password set and belongs to `Remote Desktop Users` or `Administrators`.
 4. **Diagnostic Probe:** In NetTopology's **Remote Test** tab, click **[Test Connection]** to confirm connectivity and measure latency before opening the live session.
+
+---
+
+## Dedicated SSH Test (Paramiko 2 & WebSocket) Installation Guide
+
+The **SSH Test** module provides an unsimulated, authentic terminal connection, live diagnostic auditing, and telemetry discovery for physical network nodes using the **Paramiko 2.12.0** engine and a bidirectional **WebSocket** transport layer.
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                     SSH Test Module Architecture                       │
+├───────────────┬────────────────────────┬───────────────────────────────┤
+│ Client Browser│      Node.js Server    │     Python 3 Backend Engine   │
+│  (React UI)   │       (Port 3000)      │           (Port 5001)         │
+├───────────────┼────────────────────────┼───────────────────────────────┤
+│  SshTestView  │                        │                               │
+│  Diagnostic   │ ── REST API Proxy ───> │ Flask Router / Controller     │
+│  FetchedData  │                        │ ├── 8-Layer Diagnostic Engine │
+│               │                        │ ├── Telemetry Collector       │
+│               │                        │ └── Encrypted Vault (AES-CBC) │
+│               │                        │                               │
+│  Interactive  │ ── WS: /ws/ssh-test ──>│ Node.js WS Bridge             │
+│  Terminal     │                        │ └── Spawns terminal_worker.py │
+│  (ANSI/PTY)   │ <── Stdio JSON Stream─ │     └── Paramiko invoke_shell │
+│               │                        │         └── Target Node (:22) │
+└───────────────┴────────────────────────┴───────────────────────────────┘
+```
+
+### System Prerequisites
+- Python 3.8 or higher (`python3`)
+- Python package manager (`python3-pip`)
+- Standard system compilation toolchain (required for C cryptography primitives):
+  ```bash
+  # Ubuntu / Debian:
+  sudo apt update
+  sudo apt install -y python3 python3-pip python3-dev build-essential libssl-dev libffi-dev
+
+  # RHEL / CentOS / AlmaLinux / Fedora:
+  sudo dnf install -y python3 python3-pip python3-devel gcc openssl-devel libffi-devel
+  ```
+
+### 1. Install Python Dependencies (Paramiko 2)
+In the project root directory:
+```bash
+# Install exact pinned requirements:
+pip3 install -r backend/requirements.txt
+
+# Or install manually:
+pip3 install "paramiko>=2.12.0,<3.0.0" "cryptography>=3.4.8" "websockets>=10.0" flask requests
+```
+
+> **Verify Paramiko 2 installation:**
+> ```bash
+> python3 -c "import paramiko; print('Paramiko version:', paramiko.__version__)"
+> # Expected: Paramiko version: 2.12.0
+> ```
+
+### 2. Configure Security Environment Variables (Optional)
+Specify your secret key in `.env` to protect device passwords and private keys stored in the local encrypted vault:
+```env
+# AES-CBC master encryption key for SSH credentials vault
+SSH_TEST_SECRET_KEY=your-custom-master-passphrase-32-chars-minimum
+PYTHON_PORT=5001
+```
+
+### 3. Network & Firewall Readiness
+- Verify outbound TCP access to port `22` (or your device's customized SSH port) from the host running NetTopology:
+  ```bash
+  nc -zv -w 3 192.168.1.1 22
+  ```
+- If authenticating with private keys, paste the raw RSA or OpenSSH private key into the modal (e.g., `-----BEGIN RSA PRIVATE KEY-----`).
+
+### 4. Running the Application
+```bash
+# Launch both frontend and backend concurrently:
+npm run dev
+
+# Or for production:
+npm run build
+npm start
+```
+Navigate to the **ssh test** tab in the sidebar, add a network host, and run the **[Audit End-to-End Link]** button to inspect all 8 layers.
 
 ---
 

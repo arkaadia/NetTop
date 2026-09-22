@@ -72,6 +72,8 @@ export const translations = {
     parent_automation_tag: 'AUTO',
     parent_remote_title: 'Remote Test',
     parent_remote_tag: 'RDP',
+    parent_ssh_test_title: 'SSH Test',
+    parent_ssh_test_tag: 'PARAMIKO',
 
     // Sidebar Children Items
     tab_dashboard: 'Network Dashboard',
@@ -82,6 +84,7 @@ export const translations = {
     tab_scanner: 'CDP/LLDP Discovery Scanner',
     tab_automation: 'Network Automation (Cisco / MikroTik)',
     tab_remote_test: 'Remote Test',
+    tab_ssh_test: 'SSH Test',
 
     // Remote Test & Windows Remote Desktop
     remote_test_title: 'Remote Test',
@@ -750,6 +753,8 @@ export const translations = {
     parent_automation_tag: 'AUTO',
     parent_remote_title: 'تست ریموت (Remote Test)',
     parent_remote_tag: 'RDP',
+    parent_ssh_test_title: 'SSH تست (Paramiko 2)',
+    parent_ssh_test_tag: 'SSH',
 
     // Sidebar Children Items
     tab_dashboard: 'داشبورد وضعیت شبکه',
@@ -760,6 +765,7 @@ export const translations = {
     tab_scanner: 'اسکن همسایگی CDP/LLDP',
     tab_automation: 'اتوماسیون تجهیزات (سیسکو / میکروتیک)',
     tab_remote_test: 'تست ریموت (Remote Test)',
+    tab_ssh_test: 'ssh تست',
 
     // Remote Test & Windows Remote Desktop
     remote_test_title: 'تست ریموت',

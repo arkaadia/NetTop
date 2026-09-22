@@ -18,6 +18,9 @@ import {
   setupRemoteDesktopWebSocketServer
 } from './server/remoteDesktopTunnel';
 import {
+  setupSshTestWebSocketServer
+} from './server/sshTestTunnel';
+import {
   discoverCdpLldp,
   importNeighbors
 } from './server/cdpLldpDiscovery';
@@ -530,6 +533,7 @@ async function startServer() {
   setupSshWebSocketServer(server);
   setupTelnetWebSocketServer(server);
   setupRemoteDesktopWebSocketServer(server);
+  setupSshTestWebSocketServer(server);
 
   const HOST = process.env.HOST || '0.0.0.0';
   server.listen(PORT, HOST, () => {

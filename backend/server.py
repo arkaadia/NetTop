@@ -50,6 +50,14 @@ except ImportError:
     except ImportError:
         handle_remote_desktop_request = None
 
+try:
+    from backend.ssh_test import handle_ssh_test_request
+except ImportError:
+    try:
+        from ssh_test import handle_ssh_test_request
+    except ImportError:
+        handle_ssh_test_request = None
+
 # Data file path
 DATA_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(DATA_DIR, "network_data.json")
@@ -1207,6 +1215,14 @@ class NetworkAPIHandler(BaseHTTPRequestHandler):
                 self._send_json(503, {"error": "Remote Desktop module unavailable"})
             return
 
+        if path.startswith("/api/ssh-test"):
+            if handle_ssh_test_request:
+                status_code, res = handle_ssh_test_request("GET", self.path, query=parse_qs(url.query))
+                self._send_json(status_code, res)
+            else:
+                self._send_json(503, {"error": "SSH Test module unavailable"})
+            return
+
         if path == "/api/health":
             self._send_json(200, {
                 "status": "online",
@@ -1430,6 +1446,14 @@ class NetworkAPIHandler(BaseHTTPRequestHandler):
                 self._send_json(status_code, res)
             else:
                 self._send_json(503, {"error": "Remote Desktop module unavailable"})
+            return
+
+        if path.startswith("/api/ssh-test"):
+            if handle_ssh_test_request:
+                status_code, res = handle_ssh_test_request("POST", self.path, body=body, query=parse_qs(url.query))
+                self._send_json(status_code, res)
+            else:
+                self._send_json(503, {"error": "SSH Test module unavailable"})
             return
 
         if path == "/api/switch/test-connection":
@@ -2138,6 +2162,14 @@ class NetworkAPIHandler(BaseHTTPRequestHandler):
                 self._send_json(503, {"error": "Remote Desktop module unavailable"})
             return
 
+        if path.startswith("/api/ssh-test"):
+            if handle_ssh_test_request:
+                status_code, res = handle_ssh_test_request("PUT", self.path, body=body, query=parse_qs(url.query))
+                self._send_json(status_code, res)
+            else:
+                self._send_json(503, {"error": "SSH Test module unavailable"})
+            return
+
         if path.startswith("/api/devices/") and "/ports" in path:
             self._handle_port_update(path, body, data)
             return
@@ -2193,6 +2225,14 @@ class NetworkAPIHandler(BaseHTTPRequestHandler):
                 self._send_json(status_code, res)
             else:
                 self._send_json(503, {"error": "Remote Desktop module unavailable"})
+            return
+
+        if path.startswith("/api/ssh-test"):
+            if handle_ssh_test_request:
+                status_code, res = handle_ssh_test_request("DELETE", self.path, query=parse_qs(url.query))
+                self._send_json(status_code, res)
+            else:
+                self._send_json(503, {"error": "SSH Test module unavailable"})
             return
 
         if path.startswith("/api/devices/"):

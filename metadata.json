@@ -1,6 +1,6 @@
 {
   "name": "NetTopology & Device Manager",
-  "description": "پنل مدیریت تجهیزات شبکه، مانیتورینگ لحظه‌ای، اسکن همسایگی CDP/LLDP، نقشه شماتیک توپولوژی، اتوماسیون پیشرفته سیسکو و میکروتیک، مدیریت پورت‌ها و ماژول Remote Test برای اتصال زنده ریموت دسکتاپ ویندوز (RDP) با بک‌اند پایتون و Apache Guacamole",
+  "description": "پنل مدیریت تجهیزات شبکه، مانیتورینگ لحظه‌ای، اسکن همسایگی CDP/LLDP، نقشه شماتیک توپولوژی، اتوماسیون پیشرفته سیسکو و میکروتیک، ماژول اختصاصی ssh تست با ارتباط واقعی Paramiko 2 و وب‌سوکت، و ماژول Remote Test برای اتصال زنده ریموت دسکتاپ ویندوز (RDP)",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

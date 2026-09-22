@@ -12,11 +12,12 @@ import {
   Layers,
   Activity,
   Cpu,
-  Monitor
+  Monitor,
+  Terminal
 } from 'lucide-react';
 import { useLanguage } from '../i18n';
 
-export type ActiveTab = 'dashboard' | 'devices' | 'schematic' | 'templates' | 'ports' | 'scanner' | 'automation' | 'remote-test';
+export type ActiveTab = 'dashboard' | 'devices' | 'schematic' | 'templates' | 'ports' | 'scanner' | 'automation' | 'remote-test' | 'ssh-test';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -36,7 +37,7 @@ interface NavItem {
 }
 
 interface NavParentGroup {
-  id: 'infra' | 'monitor' | 'automation' | 'remote';
+  id: 'infra' | 'monitor' | 'automation' | 'remote' | 'ssh-test-group';
   titleKey: string;
   tagKey: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -137,6 +138,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
           labelKey: 'tab_remote_test',
           icon: Monitor,
           badge: 'RDP',
+        },
+      ],
+    },
+    {
+      id: 'ssh-test-group',
+      titleKey: 'parent_ssh_test_title',
+      tagKey: 'parent_ssh_test_tag',
+      icon: Terminal,
+      colorClass: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
+      items: [
+        {
+          id: 'ssh-test',
+          labelKey: 'tab_ssh_test',
+          icon: Terminal,
+          badge: 'Paramiko 2',
         },
       ],
     },
