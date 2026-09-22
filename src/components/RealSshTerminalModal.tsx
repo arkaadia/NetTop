@@ -44,8 +44,8 @@ import { useLanguage } from '../i18n/LanguageContext';
 import { WorkflowTriggerBadge } from './WorkflowTriggerBadge';
 import { parseAnsiToSpans } from '../utils/ansi';
 import { DangerousCommandModal } from './DangerousCommandModal';
-import { updateDevice, fetchDevicePorts, fetchVlans, executeTerminalDiagnostics } from '../services/api';
-import { Device, SwitchPort, VlanInfo, TerminalExecResult, TerminalDiagnosticStage } from '../types';
+import { updateDevice, fetchDevicePorts, fetchVlans, executeTerminalDiagnostics, fetchTerminalCompletions } from '../services/api';
+import { Device, SwitchPort, VlanInfo, TerminalExecResult, TerminalDiagnosticStage, TerminalCompletionCandidate } from '../types';
 
 interface RealSshTerminalModalProps {
   isOpen: boolean;
@@ -185,6 +185,11 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
   const [isDiagnosing, setIsDiagnosing] = useState<boolean>(false);
   const [activeLogTab, setActiveLogTab] = useState<'flow' | 'solution' | 'raw'>('flow');
   const [copiedLog, setCopiedLog] = useState<boolean>(false);
+
+  // Real Hardware Tab Autocompletion State
+  const [tabCandidates, setTabCandidates] = useState<TerminalCompletionCandidate[]>([]);
+  const [activeCandidateIndex, setActiveCandidateIndex] = useState<number>(-1);
+  const [isQueryingTab, setIsQueryingTab] = useState<boolean>(false);
 
   // Dangerous Command Modal
   const [pendingDangerousCmd, setPendingDangerousCmd] = useState<string | null>(null);
@@ -525,6 +530,14 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
                 timestamp: new Date().toISOString()
               };
             });
+          } else if (msg.type === 'tab_result') {
+            setIsQueryingTab(false);
+            processCompletionResult(
+              msg.completedText,
+              msg.completions,
+              msg.rawOutput,
+              msg.prefix
+            );
           }
         } catch {
           // If raw text
@@ -795,10 +808,126 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
     inputRef.current?.focus();
   };
 
+  // Apply a candidate command keyword to the prompt input
+  const applyCandidateToInput = (cmdWord: string) => {
+    const isTrailingSpace = currentInput.endsWith(' ');
+    const tokens = currentInput.trim().split(/\s+/).filter(Boolean);
+
+    let updated = '';
+    if (isTrailingSpace || tokens.length === 0) {
+      updated = `${currentInput}${cmdWord} `;
+    } else {
+      tokens[tokens.length - 1] = cmdWord;
+      updated = `${tokens.join(' ')} `;
+    }
+    setCurrentInput(updated);
+    inputRef.current?.focus();
+  };
+
+  // Process completions received from real Cisco switch hardware
+  const processCompletionResult = (
+    completedText?: string | null,
+    candidates?: TerminalCompletionCandidate[],
+    rawOutput?: string,
+    prefix: string = currentInput
+  ) => {
+    // 1. If unique match was identified on the physical switch ("پرش کن"):
+    if (completedText && completedText !== prefix) {
+      setCurrentInput(completedText);
+      setTabCandidates([]);
+      setActiveCandidateIndex(-1);
+      return;
+    }
+
+    // 2. If candidates list returned by the real switch ("خودش نشون بده"):
+    if (candidates && candidates.length > 0) {
+      setTabCandidates(candidates);
+      setActiveCandidateIndex(-1);
+
+      if (candidates.length === 1) {
+        applyCandidateToInput(candidates[0].cmd);
+        setTabCandidates([]);
+        return;
+      }
+
+      // Display real Cisco completions in terminal window as Cisco IOS CLI does
+      if (rawOutput && rawOutput.trim()) {
+        setTerminalOutput((prev) => `${prev}\r\n${rawOutput.trim()}\r\n`);
+      } else {
+        const formatted = candidates.map((c) => `  ${c.cmd.padEnd(20)} ${c.desc || ''}`).join('\r\n');
+        setTerminalOutput((prev) => `${prev}\r\n${formatted}\r\n`);
+      }
+    } else {
+      setTabCandidates([]);
+      setActiveCandidateIndex(-1);
+    }
+  };
+
+  // Query completions from real hardware over WebSocket or REST API
+  const requestRealHardwareCompletion = async (prefixToComplete: string) => {
+    const trimmed = prefixToComplete;
+    setIsQueryingTab(true);
+
+    if (terminalEngine === 'simulator') {
+      const tokens = trimmed.trim().split(/\s+/).filter(Boolean);
+      const isTrailing = trimmed.endsWith(' ');
+      const lastToken = isTrailing ? '' : (tokens.length > 0 ? tokens[tokens.length - 1] : '');
+      const candidates: TerminalCompletionCandidate[] = [];
+
+      for (const item of CISCO_COMMAND_GUIDE) {
+        if (!lastToken || item.cmd.toLowerCase().startsWith(trimmed.toLowerCase())) {
+          candidates.push({ cmd: item.cmd, desc: isEn ? item.descEn : item.descFa });
+        }
+      }
+
+      setIsQueryingTab(false);
+      if (candidates.length === 1) {
+        setCurrentInput(candidates[0].cmd + ' ');
+        setTabCandidates([]);
+        setActiveCandidateIndex(-1);
+      } else if (candidates.length > 1) {
+        setTabCandidates(candidates.slice(0, 10));
+        setActiveCandidateIndex(-1);
+      }
+      return;
+    }
+
+    // Real SSH Hardware Mode (100% real switch queries, no mock)
+    try {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        // Real-time interactive PTY query via active WebSocket session
+        wsRef.current.send(
+          JSON.stringify({
+            type: 'tab',
+            prefix: trimmed
+          })
+        );
+      } else {
+        // Direct probe via POST /api/terminal/exec
+        const res = await fetchTerminalCompletions({
+          host,
+          port,
+          username,
+          password,
+          enablePassword,
+          completePrefix: trimmed,
+          command: `${trimmed}?`
+        });
+        setIsQueryingTab(false);
+        processCompletionResult(res.completedText, res.completions, res.commandOutput, trimmed);
+      }
+    } catch (err: any) {
+      console.error('Error querying real hardware completion:', err);
+      setIsQueryingTab(false);
+    }
+  };
+
   // Keyboard navigation & Shortcuts
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      setTabCandidates([]);
+      setActiveCandidateIndex(-1);
       handleSendCommand();
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
@@ -819,13 +948,31 @@ export const RealSshTerminalModal: React.FC<RealSshTerminalModalProps> = ({
       }
     } else if (e.key === 'Tab') {
       e.preventDefault();
-      sendRawData(currentInput + '\t');
+      // If candidates list is currently visible, cycle to next candidate on Tab press
+      if (tabCandidates.length > 0) {
+        const nextIdx = (activeCandidateIndex + 1) % tabCandidates.length;
+        setActiveCandidateIndex(nextIdx);
+        applyCandidateToInput(tabCandidates[nextIdx].cmd);
+        return;
+      }
+      // Trigger real Cisco hardware completion query
+      requestRealHardwareCompletion(currentInput);
+    } else if (e.key === 'Escape') {
+      if (tabCandidates.length > 0) {
+        e.preventDefault();
+        setTabCandidates([]);
+        setActiveCandidateIndex(-1);
+      }
     } else if (e.ctrlKey && (e.key === 'c' || e.key === 'C')) {
       e.preventDefault();
+      setTabCandidates([]);
+      setActiveCandidateIndex(-1);
       sendRawData('\x03');
       setCurrentInput('');
     } else if (e.ctrlKey && (e.key === 'z' || e.key === 'Z')) {
       e.preventDefault();
+      setTabCandidates([]);
+      setActiveCandidateIndex(-1);
       sendRawData('\x1a');
       setCurrentInput('');
     }
@@ -1909,6 +2056,65 @@ show run | section line vty`}
             )}
           </div>
 
+          {/* Real-time Hardware Tab Completion Suggestions Bar */}
+          {tabCandidates.length > 0 && (
+            <div className="px-4 py-2 bg-slate-900/95 border-t border-indigo-500/40 flex flex-col gap-1.5 backdrop-blur z-10 transition-all shadow-lg shadow-black/40">
+              <div className="flex items-center justify-between text-[11px]">
+                <div className="flex items-center gap-1.5 text-indigo-400 font-mono">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                  <span className="font-semibold">
+                    {isEn ? 'Real Hardware Completions (Tab):' : 'پیشنهادات سخت‌افزار واقعی سوئیچ (کلید Tab):'}
+                  </span>
+                  <span className="text-slate-400 text-[10px]">
+                    ({tabCandidates.length} {isEn ? 'options from switch' : 'گزینه از سوئیچ فیزیکی'})
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-slate-500 hidden sm:inline">
+                    {isEn ? 'Press Tab to cycle, Enter or click to choose' : 'کلید Tab برای پیمایش، Enter یا کلیک جهت انتخاب'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTabCandidates([]);
+                      setActiveCandidateIndex(-1);
+                    }}
+                    className="text-slate-400 hover:text-slate-200 text-[10px] p-0.5 rounded cursor-pointer hover:bg-slate-800 transition"
+                    title={isEn ? 'Close suggestions' : 'بستن پیشنهادات'}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap max-h-28 overflow-y-auto font-mono text-xs py-0.5">
+                {tabCandidates.map((candidate, idx) => (
+                  <button
+                    key={candidate.cmd + idx}
+                    type="button"
+                    onClick={() => {
+                      applyCandidateToInput(candidate.cmd);
+                      setTabCandidates([]);
+                      setActiveCandidateIndex(-1);
+                    }}
+                    className={`px-2.5 py-1 rounded text-xs transition cursor-pointer border flex items-center gap-1.5 ${
+                      activeCandidateIndex === idx
+                        ? 'bg-indigo-600 text-white border-indigo-400 font-bold shadow-md shadow-indigo-900/40 ring-1 ring-indigo-300'
+                        : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700 hover:border-indigo-500/50'
+                    }`}
+                    title={candidate.desc || candidate.cmd}
+                  >
+                    <span className="text-emerald-400 font-semibold">{candidate.cmd}</span>
+                    {candidate.desc && (
+                      <span className="text-[10px] text-slate-400 max-w-[170px] truncate">
+                        {candidate.desc}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Command Prompt Input Bar */}
           <div className="px-4 py-2.5 bg-slate-900 border-t border-slate-800 flex items-center gap-2 shrink-0">
             <div className="text-emerald-400 font-mono text-xs font-bold flex items-center gap-1 select-none">
@@ -1928,14 +2134,32 @@ show run | section line vty`}
                     ? 'Connecting to hardware...'
                     : 'در حال اتصال به سوئیچ...'
                   : isEn
-                  ? 'Enter Cisco command (e.g. show version, show run)...'
-                  : 'دستور سیسکو را وارد کنید (مثلاً show version یا show run)...'
+                  ? 'Enter Cisco command (Press Tab for real hardware autocompletion)...'
+                  : 'دستور سیسکو را وارد کنید (کلید Tab برای تکمیل خودکار از سوئیچ)...'
               }
               className="flex-1 bg-transparent text-slate-100 font-mono text-xs focus:outline-none placeholder-slate-600"
               dir="ltr"
               autoComplete="off"
               spellCheck={false}
             />
+
+            {isQueryingTab && (
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-indigo-950/80 border border-indigo-700/50 text-[11px] text-indigo-300 font-mono shrink-0 animate-pulse">
+                <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />
+                <span className="hidden sm:inline">{isEn ? 'Hardware Tab...' : 'استعلام Tab از سوئیچ...'}</span>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => requestRealHardwareCompletion(currentInput)}
+              disabled={isQueryingTab}
+              className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-750 active:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 hover:border-indigo-500/50 text-[11px] font-mono transition cursor-pointer"
+              title={isEn ? 'Query Tab autocompletion from physical switch' : 'استعلام تکمیل خودکار با Tab از سخت‌افزار واقعی سوئیچ'}
+            >
+              <Sparkles className="w-3 h-3 text-indigo-400" />
+              <span>Tab</span>
+            </button>
 
             <div className="flex items-center gap-1.5">
               <button

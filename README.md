@@ -84,6 +84,12 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
     - تب *راهنمای عیب‌یابی و فرامین سیسکو (Troubleshooting & Cisco Commands)* با قطعه کدهای آماده کپی.
     - تب *لاگ زنده و خام رویدادها (Real-Time Event Stream)* جهت مشاهده جزئیات جریان وب‌سوکت.
   - **کپی کامل گزارش تشخیصی:** دکمه کپی جهت دریافت گزارش متنی منسجم شامل زمان، میزبان مقصد، وضعیت مراحل و لاگ زنده جهت ارائه به تیم پشتیبانی شبکه.
+- **تکمیل خودکار و پیش‌بینی واقعی دستورات از سخت‌افزار سیسکو با کلید Tab (Real Hardware Cisco Tab Autocompletion):**
+  - **استعلام ۱۰۰٪ واقعی و مستقیم از سوئیچ فیزیکی بدون دیتای ماک:** هنگام فشردن کلید `Tab` یا کلیک روی دکمه اختصاصی Tab، دستور مستقیماً به شل زنده سوئیچ فیزیکی سیسکو ارسال شده و کاندیداهای معتبر مستقیماً از خروجی واقعی سخت‌افزار (`?` یا استریم تعاملی) استخراج می‌شوند.
+  - **تکمیل و پر کردن خودکار دستور (Auto-fill):** در صورتی که کاراکترهای تایپ‌شده تنها یک معادل منحصر‌به‌فرد در سوئیچ داشته باشند، کلمه بلافاصله با فرمان کامل سیسکو جایگزین و تکمیل می‌شود (مانند تبدیل `conf` به `configure ` یا `show ver` به `show version `).
+  - **نمایش تعاملی پیشنهادات چندگانه (Ambiguous Options Bar):** اگر دستور وارد شده دارای چندین گزینه مجاز باشد، نوار گزینه‌ها با چیپ‌های پرکنتراست در بالای خط فرمان فعال شده و کلمات همراه با توضیحات رسمی IOS نمایش داده می‌شوند.
+  - **پیمایش چرخشی با کلید Tab:** با فشردن مجدد کلید `Tab`، گزینه‌ها به ترتیب انتخاب شده و در خط فرمان قرار می‌گیرند؛ همچنین با کلیک روی هر چیپ یا فشردن `Enter`، دستور درج و پیشنهادها بسته می‌شوند.
+  - **پشتیبانی دوگانه از وب‌سوکت و REST API:** امکان استعلام هم از طریق پیام وب‌سوکت بلادرنگ (`type: 'tab'`) در جلسه فعال SSH و هم از طریق اندپوینت اختصاصی `POST /api/terminal/complete` و `POST /api/terminal/exec`.
 
 ### ۴. مدیریت تغییرات ذخیره‌نشده و رایت در حافظه (NVRAM Write Memory)
 - **شناسایی تغییرات رایت‌نشده:** تشخیص عدم تطابق بین `running-config` و `startup-config` با نمایش بج هشدار زرد رنگ.
@@ -540,6 +546,12 @@ npm start
   - **Pinpointed Failure Isolation & Remediation:** Accurately isolates exact failure stages with detailed root-cause descriptions and actionable Cisco CLI fixes (`crypto key generate rsa modulus 2048`, `transport input ssh`, `login local`).
   - **Multi-Tab Diagnostic View:** Structured tabs for *5-Layer Lifecycle Stages*, *Troubleshooting & Cisco Commands*, and *Real-Time WebSocket Event Stream*.
   - **One-Click Diagnostic Report Export:** Formatted clipboard report copy for rapid incident escalation and network operations team review.
+- **Real Hardware Cisco Tab Autocompletion (Zero Mock Data):**
+  - **100% Authentic Live Switch Probing:** Pressing `Tab` (or clicking the prompt Tab button) queries the live Cisco switch hardware stream directly without synthetic or mock placeholders.
+  - **Unambiguous Auto-Fill:** Automatically completes unique command matches and appends trailing delimiters directly into the active prompt (e.g. typing `conf` fills `configure `, `show ver` fills `show version `).
+  - **Ambiguous Options Bar:** When multiple command candidates are valid, an interactive high-contrast suggestion ribbon opens above the command bar with Cisco command tokens and official IOS descriptions.
+  - **Sequential Tab Cycling & Quick Select:** Successive `Tab` keypresses rotate through the available suggestions and inject them into the command line; items can also be clicked or confirmed via `Enter`.
+  - **Dual-Channel WebSocket & REST Support:** Executes queries via real-time WebSocket frames (`type: 'tab'`) inside existing sessions, or via dedicated `POST /api/terminal/complete` and `POST /api/terminal/exec` endpoints.
 
 ### 4. Unsaved Configuration Detection & NVRAM Write
 - **Startup vs. Running-Config Tracking:** Detects unsaved volatile memory changes and triggers warning badges.

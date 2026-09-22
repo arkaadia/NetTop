@@ -4,7 +4,13 @@ import net from 'net';
 import fs from 'fs';
 import path from 'path';
 import { WebSocketServer, WebSocket } from 'ws';
-import { Client, ConnectConfig } from 'ssh2';
+import { Client } from 'ssh2';
+import type { ConnectConfig } from 'ssh2';
+
+export interface TerminalCompletionCandidate {
+  cmd: string;
+  desc?: string;
+}
 
 export interface TerminalExecParams {
   host: string;
@@ -14,6 +20,8 @@ export interface TerminalExecParams {
   enablePassword?: string;
   command?: string;
   timeoutMs?: number;
+  completePrefix?: string;
+  mode?: 'exec' | 'complete' | 'diagnostics';
 }
 
 export interface TerminalDiagnosticStage {
@@ -46,6 +54,168 @@ export interface TerminalExecResult {
   kex?: string;
   commandOutput?: string;
   timestamp: string;
+  prefix?: string;
+  completedText?: string;
+  completions?: TerminalCompletionCandidate[];
+  isAmbiguous?: boolean;
+}
+
+/**
+ * Parses raw terminal output received from real Cisco IOS/XE devices
+ * when '?' or '\t' is executed in Privileged EXEC or Config modes.
+ * Extracts authentic command keywords, subcommands, and Cisco descriptions.
+ */
+export function parseCiscoCompletions(
+  rawOutput: string,
+  prefix: string = ''
+): {
+  candidates: TerminalCompletionCandidate[];
+  exactMatch: string | null;
+  completedText: string | null;
+  isAmbiguous: boolean;
+  cleanOutput: string;
+} {
+  // Strip ANSI escape sequences and carriage returns
+  const clean = rawOutput
+    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+    .replace(/\x1b\([a-zA-Z]/g, '')
+    .replace(/\r/g, '');
+
+  const lines = clean.split('\n');
+  const candidates: TerminalCompletionCandidate[] = [];
+  const wordsSet = new Set<string>();
+
+  // Determine the token we are trying to complete
+  const isTrailingSpace = prefix.endsWith(' ');
+  const tokens = prefix.trim().split(/\s+/).filter(Boolean);
+  const lastToken = isTrailingSpace ? '' : (tokens.length > 0 ? tokens[tokens.length - 1] : '');
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (
+      !trimmed ||
+      trimmed.startsWith('%') ||
+      trimmed.includes('--More--') ||
+      trimmed.includes('<--- More --->') ||
+      /^[A-Za-z0-9_.\-]+[>#]/.test(trimmed)
+    ) {
+      continue;
+    }
+
+    // Pattern 1: Described commands e.g. "  access-lists   List access lists"
+    const matchDesc = line.match(/^\s{1,8}([a-zA-Z0-9\-_.]+)\s{2,}(.+)$/);
+    if (matchDesc) {
+      const cmd = matchDesc[1];
+      const desc = matchDesc[2].trim();
+      if (!wordsSet.has(cmd) && !cmd.includes('?') && !cmd.startsWith('<')) {
+        wordsSet.add(cmd);
+        candidates.push({ cmd, desc });
+      }
+      continue;
+    }
+
+    // Pattern 2: Multi-column words e.g. "clear  clock  configure  connect  copy"
+    const words = trimmed.split(/\s{2,}|\t+/);
+    if (words.length > 1) {
+      for (const w of words) {
+        const cw = w.trim();
+        if (
+          cw &&
+          !cw.includes('?') &&
+          !cw.startsWith('<') &&
+          !/^[A-Za-z0-9_.\-]+[>#]/.test(cw) &&
+          !wordsSet.has(cw)
+        ) {
+          wordsSet.add(cw);
+          candidates.push({ cmd: cw });
+        }
+      }
+      continue;
+    }
+
+    // Pattern 3: Single command word completion e.g. "configure" or "show"
+    if (
+      /^[a-zA-Z0-9\-_.]+$/.test(trimmed) &&
+      !trimmed.includes('?') &&
+      !wordsSet.has(trimmed)
+    ) {
+      wordsSet.add(trimmed);
+      candidates.push({ cmd: trimmed });
+    }
+  }
+
+  // Filter candidates if user was typing a partial token
+  let filtered = candidates;
+  if (lastToken) {
+    const tokenLower = lastToken.toLowerCase();
+    const matching = candidates.filter((c) =>
+      c.cmd.toLowerCase().startsWith(tokenLower)
+    );
+    if (matching.length > 0) {
+      filtered = matching;
+    }
+  }
+
+  // Calculate common prefix among candidates
+  let common = '';
+  if (filtered.length > 0) {
+    const first = filtered[0].cmd;
+    let commonLen = first.length;
+    for (let i = 1; i < filtered.length; i++) {
+      const nextCmd = filtered[i].cmd;
+      let j = 0;
+      while (
+        j < commonLen &&
+        j < nextCmd.length &&
+        first[j].toLowerCase() === nextCmd[j].toLowerCase()
+      ) {
+        j++;
+      }
+      commonLen = j;
+    }
+    common = first.slice(0, commonLen);
+  }
+
+  // Calculate completedText
+  let completedText: string | null = null;
+  let exactMatch: string | null = null;
+
+  if (filtered.length === 1) {
+    exactMatch = filtered[0].cmd;
+    // Complete the line
+    if (isTrailingSpace) {
+      completedText = `${prefix}${exactMatch} `;
+    } else {
+      const baseTokens = [...tokens];
+      if (baseTokens.length > 0) {
+        baseTokens[baseTokens.length - 1] = exactMatch;
+      } else {
+        baseTokens.push(exactMatch);
+      }
+      completedText = `${baseTokens.join(' ')} `;
+    }
+  } else if (filtered.length > 1 && common.length > lastToken.length) {
+    // Partial common prefix completion
+    if (isTrailingSpace) {
+      completedText = `${prefix}${common}`;
+    } else {
+      const baseTokens = [...tokens];
+      if (baseTokens.length > 0) {
+        baseTokens[baseTokens.length - 1] = common;
+      } else {
+        baseTokens.push(common);
+      }
+      completedText = baseTokens.join(' ');
+    }
+  }
+
+  return {
+    candidates: filtered,
+    exactMatch,
+    completedText,
+    isAmbiguous: filtered.length > 1,
+    cleanOutput: clean
+  };
 }
 
 export interface SshTestParams {
@@ -488,6 +658,47 @@ export function setupSshWebSocketServer(server: http.Server | WebSocketServer) {
           if (sshStream && isConnected) {
             sshStream.write(payload.data);
           }
+        } else if (payload.type === 'tab' || payload.type === 'complete') {
+          // Real-time tab autocompletion and candidate discovery on live Cisco hardware
+          const prefix = String(payload.prefix || '');
+          if (sshStream && isConnected) {
+            let tabBuf = '';
+            const onTabChunk = (chunk: Buffer) => {
+              tabBuf += chunk.toString('utf-8');
+            };
+            sshStream.on('data', onTabChunk);
+
+            // Send prefix + '?' to real interactive Cisco PTY session
+            sshStream.write(prefix + '?');
+
+            setTimeout(() => {
+              try {
+                sshStream.removeListener('data', onTabChunk);
+                // Clear the switch line buffer with Ctrl+U (\x15) so prompt is clean
+                sshStream.write('\x15');
+              } catch {}
+
+              const parsed = parseCiscoCompletions(tabBuf, prefix);
+              ws.send(JSON.stringify({
+                type: 'tab_result',
+                prefix,
+                completedText: parsed.completedText,
+                completions: parsed.candidates,
+                exactMatch: parsed.exactMatch,
+                isAmbiguous: parsed.isAmbiguous,
+                rawOutput: tabBuf
+              }));
+            }, 300);
+          } else {
+            ws.send(JSON.stringify({
+              type: 'tab_result',
+              prefix,
+              completedText: null,
+              completions: [],
+              isAmbiguous: false,
+              rawOutput: 'Not connected to switch'
+            }));
+          }
         } else if (payload.type === 'resize') {
           // Terminal window resize event
           if (sshStream && payload.cols && payload.rows) {
@@ -749,7 +960,11 @@ export async function executeTerminalDiagnosticsAndCommand(
       stages[4].details = 'Spawning interactive session channel...';
       stages[4].detailsFa = 'در حال راه‌اندازی کانال شل ترمینال تعاملی...';
 
-      const execCmd = command || 'terminal length 0\nshow privilege';
+      const isCompleteMode = params.mode === 'complete' || params.completePrefix !== undefined;
+      const prefix = params.completePrefix !== undefined ? params.completePrefix : '';
+      const execCmd = isCompleteMode
+        ? `terminal length 0\n${prefix}?`
+        : command || 'terminal length 0\nshow privilege';
       const execStart = Date.now();
 
       conn.exec(execCmd, { pty: { term: 'xterm-256color', cols: 100, rows: 30 } }, (execErr, stream) => {
@@ -801,14 +1016,31 @@ export async function executeTerminalDiagnosticsAndCommand(
           stages[4].details = `Command completed successfully (${finalOutput.length} bytes captured).`;
           stages[4].detailsFa = `دستور با موفقیت اجرا شد و خروجی ثبت گردید (${finalOutput.length} بایت).`;
 
+          let parsedCompletion: any = null;
+          if (isCompleteMode) {
+            parsedCompletion = parseCiscoCompletions(finalOutput, prefix);
+          }
+
           finishResult({
             success: true,
-            message: `SSH Connection & Diagnostics fully verified (${Date.now() - startTime}ms)`,
-            messageFa: `ارتباط SSH و کلیه مراحل احراز هویت با موفقیت بررسی شد (${Date.now() - startTime} میلی‌ثانیه)`,
+            message: parsedCompletion
+              ? parsedCompletion.exactMatch
+                ? `Command auto-completed to "${parsedCompletion.exactMatch}" from real switch.`
+                : `Discovered ${parsedCompletion.candidates.length} completions on real switch.`
+              : `SSH Connection & Diagnostics fully verified (${Date.now() - startTime}ms)`,
+            messageFa: parsedCompletion
+              ? parsedCompletion.exactMatch
+                ? `دستور به صورت خودکار به "${parsedCompletion.exactMatch}" از روی سوئیچ فیزیکی کامل شد.`
+                : `تعداد ${parsedCompletion.candidates.length} گزینه مرتبط از روی سخت‌افزار واقعی سوئیچ استخراج شد.`
+              : `ارتباط SSH و کلیه مراحل احراز هویت با موفقیت بررسی شد (${Date.now() - startTime} میلی‌ثانیه)`,
             latency_ms: Date.now() - startTime,
             stages,
             banner: bannerCaptured.trim() || undefined,
             commandOutput: finalOutput.slice(0, 4000),
+            prefix: isCompleteMode ? prefix : undefined,
+            completedText: parsedCompletion?.completedText || undefined,
+            completions: parsedCompletion?.candidates || undefined,
+            isAmbiguous: parsedCompletion?.isAmbiguous,
             timestamp: new Date().toISOString()
           });
         }

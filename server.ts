@@ -134,7 +134,7 @@ app.post('/api/ssh/test', async (req: Request, res: Response) => {
 // Interactive Real SSH Terminal Execution & Deep Diagnostics endpoint
 app.post('/api/terminal/exec', async (req: Request, res: Response) => {
   try {
-    const { host, port, username, password, enablePassword, command, timeoutMs } = req.body || {};
+    const { host, port, username, password, enablePassword, command, timeoutMs, completePrefix, mode } = req.body || {};
     if (!host || !username) {
       return res.status(400).json({
         success: false,
@@ -143,7 +143,8 @@ app.post('/api/terminal/exec', async (req: Request, res: Response) => {
       });
     }
 
-    console.log(`[Terminal Exec API] Running diagnostic execution pipeline on ${username}@${host}:${port || 22}...`);
+    const isComplete = mode === 'complete' || completePrefix !== undefined;
+    console.log(`[Terminal Exec API] Running ${isComplete ? 'real completion' : 'diagnostic execution'} pipeline on ${username}@${host}:${port || 22}...`);
     const result = await executeTerminalDiagnosticsAndCommand({
       host: String(host).trim(),
       port: Number(port) || 22,
@@ -151,7 +152,9 @@ app.post('/api/terminal/exec', async (req: Request, res: Response) => {
       password: password !== undefined ? String(password) : '',
       enablePassword: enablePassword !== undefined ? String(enablePassword) : '',
       command: command !== undefined ? String(command) : '',
-      timeoutMs: Number(timeoutMs) || 12000
+      timeoutMs: Number(timeoutMs) || 12000,
+      completePrefix: completePrefix !== undefined ? String(completePrefix) : undefined,
+      mode: isComplete ? 'complete' : 'exec'
     });
 
     res.json(result);
@@ -160,6 +163,40 @@ app.post('/api/terminal/exec', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: `Terminal diagnostics execution error: ${err.message}`,
+      stages: []
+    });
+  }
+});
+
+// Dedicated endpoint for querying real hardware command autocompletion directly
+app.post('/api/terminal/complete', async (req: Request, res: Response) => {
+  try {
+    const { host, port, username, password, enablePassword, prefix, timeoutMs } = req.body || {};
+    if (!host || !username) {
+      return res.status(400).json({
+        success: false,
+        message: 'Host and username are required for command completion query',
+        stages: []
+      });
+    }
+
+    const result = await executeTerminalDiagnosticsAndCommand({
+      host: String(host).trim(),
+      port: Number(port) || 22,
+      username: String(username).trim(),
+      password: password !== undefined ? String(password) : '',
+      enablePassword: enablePassword !== undefined ? String(enablePassword) : '',
+      completePrefix: prefix !== undefined ? String(prefix) : '',
+      mode: 'complete',
+      timeoutMs: Number(timeoutMs) || 10000
+    });
+
+    res.json(result);
+  } catch (err: any) {
+    console.error('[Terminal Complete API] Error in /api/terminal/complete:', err);
+    res.status(500).json({
+      success: false,
+      message: `Terminal completion query error: ${err.message}`,
       stages: []
     });
   }

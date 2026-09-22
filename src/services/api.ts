@@ -541,6 +541,27 @@ export async function executeTerminalDiagnostics(
   return data;
 }
 
+/**
+ * Query real hardware command autocompletion and candidate discovery
+ * Calls POST /api/terminal/exec or /api/terminal/complete
+ */
+export async function fetchTerminalCompletions(
+  params: TerminalExecParams
+): Promise<TerminalExecResult> {
+  const res = await fetch(`${API_BASE}/terminal/exec`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ...params,
+      mode: 'complete',
+      completePrefix: params.completePrefix || '',
+      command: params.command || (params.completePrefix ? `${params.completePrefix}?` : '?')
+    }),
+  });
+  const data = await res.json();
+  return data;
+}
+
 
 
 

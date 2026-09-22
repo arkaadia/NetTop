@@ -89,6 +89,11 @@ export interface RealTelnetTestResult {
   port: number;
 }
 
+export interface TerminalCompletionCandidate {
+  cmd: string;
+  desc?: string;
+}
+
 export interface TerminalExecParams {
   host: string;
   port?: number;
@@ -97,6 +102,8 @@ export interface TerminalExecParams {
   enablePassword?: string;
   command?: string;
   timeoutMs?: number;
+  completePrefix?: string;
+  mode?: 'exec' | 'complete' | 'diagnostics';
 }
 
 export interface TerminalDiagnosticStage {
@@ -129,6 +136,10 @@ export interface TerminalExecResult {
   kex?: string;
   commandOutput?: string;
   timestamp: string;
+  prefix?: string;
+  completedText?: string;
+  completions?: TerminalCompletionCandidate[];
+  isAmbiguous?: boolean;
 }
 
 export interface RealSwitchDiscoveryResult {
