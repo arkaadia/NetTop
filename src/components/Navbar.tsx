@@ -3,7 +3,7 @@ import { RefreshCw, Zap, Palette, ChevronDown, Check, Globe, User, ShieldCheck, 
 import { APP_VERSION } from '../version';
 import { useLanguage } from '../i18n';
 
-export type ThemeType = 'obsidian' | 'emerald' | 'cobalt' | 'rose' | 'amber' | 'cyberpunk' | 'light';
+export type ThemeType = 'obsidian' | 'emerald' | 'cobalt' | 'rose' | 'amber' | 'cyberpunk' | 'dracula' | 'light';
 
 interface NavbarProps {
   onRefreshAll: () => void;
@@ -55,6 +55,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const themeOptions: { id: ThemeType; nameKey: string; color: string; bgClass: string }[] = [
     { id: 'obsidian', nameKey: 'theme_obsidian', color: '#6366f1', bgClass: 'bg-indigo-600' },
+    { id: 'dracula', nameKey: 'theme_dracula', color: '#dc2626', bgClass: 'bg-red-700' },
     { id: 'cyberpunk', nameKey: 'theme_cyberpunk', color: '#fcee0a', bgClass: 'bg-yellow-400' },
     { id: 'emerald', nameKey: 'theme_emerald', color: '#10b981', bgClass: 'bg-emerald-500' },
     { id: 'cobalt', nameKey: 'theme_cobalt', color: '#0284c7', bgClass: 'bg-sky-600' },
@@ -241,32 +242,45 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <Palette className="w-3 h-3 text-indigo-400" />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-1.5 mt-1">
+                    <div className="grid grid-cols-2 gap-1.5 mt-1">
                     {themeOptions.map((opt) => {
                       const isSelected = panelTheme === opt.id;
                       const isCyber = opt.id === 'cyberpunk';
+                      const isDracula = opt.id === 'dracula';
                       return (
                         <button
                           key={opt.id}
                           onClick={() => onChangeTheme(opt.id)}
                           className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs transition cursor-pointer text-left ${
                             isSelected
-                              ? isCyber
+                              ? isDracula
+                                ? 'bg-red-950/80 text-red-200 font-bold border border-red-500/70 shadow-[0_0_12px_rgba(220,38,38,0.5)]'
+                                : isCyber
                                 ? 'bg-yellow-400/20 text-yellow-300 font-bold border border-yellow-400/60 shadow-[0_0_12px_rgba(252,238,10,0.35)]'
                                 : 'bg-indigo-600/30 text-white font-bold border border-indigo-500/40 shadow-[0_0_10px_rgba(99,102,241,0.2)]'
+                              : isDracula
+                              ? 'text-red-300/80 hover:text-red-200 hover:bg-red-950/40 border border-red-900/40'
                               : isCyber
                               ? 'text-yellow-300/80 hover:text-yellow-300 hover:bg-yellow-400/10 border border-yellow-400/20'
                               : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent'
                           }`}
                         >
                           <span
-                            className={`w-3 h-3 rounded-full shrink-0 shadow-xs ${isCyber ? 'shadow-[0_0_8px_rgba(252,238,10,0.8)]' : ''}`}
+                            className={`w-3 h-3 rounded-full shrink-0 shadow-xs ${
+                              isDracula
+                                ? 'shadow-[0_0_8px_rgba(220,38,38,0.9)] animate-pulse'
+                                : isCyber
+                                ? 'shadow-[0_0_8px_rgba(252,238,10,0.8)]'
+                                : ''
+                            }`}
                             style={{ backgroundColor: opt.color }}
                           ></span>
                           <span className="truncate text-[11px] font-medium">{t(opt.nameKey as any).split(' ')[0]}</span>
                           {isSelected && (
                             <Check
-                              className={`w-3 h-3 ml-auto shrink-0 ${isCyber ? 'text-yellow-400' : 'text-indigo-400'}`}
+                              className={`w-3 h-3 ml-auto shrink-0 ${
+                                isDracula ? 'text-red-400' : isCyber ? 'text-yellow-400' : 'text-indigo-400'
+                              }`}
                             />
                           )}
                         </button>

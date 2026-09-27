@@ -418,6 +418,308 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 20px rgba(252, 238, 10, 0.25) !important;
 }
 
+/* ==========================================================================
+   Dracula Blood Gothic Theme - تم خونی دراکولایی همراه با قطرات خون‌چکان دکمه‌ها
+   ========================================================================== */
+
+.theme-dracula {
+  --color-spatial-bg: #090204;
+  --color-spatial-glass: rgba(26, 4, 10, 0.88);
+  --color-spatial-glass-hover: rgba(45, 6, 18, 0.95);
+  --color-spatial-glow-cyan: #ef4444;
+  --color-spatial-glow-purple: #991b1b;
+  --color-spatial-glow-amber: #dc2626;
+  color: #fee2e2 !important;
+  background-color: #090204 !important;
+}
+
+.theme-dracula .ambient-glow-background {
+  background: 
+    radial-gradient(circle at 10% 15%, rgba(185, 28, 28, 0.3) 0%, transparent 45%),
+    radial-gradient(circle at 88% 85%, rgba(127, 29, 29, 0.25) 0%, transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(153, 27, 27, 0.12) 0%, transparent 60%),
+    radial-gradient(circle at 75% 15%, rgba(88, 28, 135, 0.16) 0%, transparent 35%),
+    #090204 !important;
+}
+
+.theme-dracula .spatial-glass {
+  background: rgba(18, 3, 7, 0.9) !important;
+  border-color: rgba(220, 38, 38, 0.35) !important;
+  box-shadow: 
+    0 10px 30px rgba(0, 0, 0, 0.85),
+    0 0 16px rgba(185, 28, 28, 0.18),
+    inset 0 1px 0 rgba(254, 202, 202, 0.14) !important;
+}
+
+.theme-dracula .spatial-glass-hover:hover {
+  background: rgba(30, 4, 12, 0.96) !important;
+  border-color: rgba(239, 68, 68, 0.6) !important;
+  box-shadow: 
+    0 20px 45px rgba(0, 0, 0, 0.92),
+    0 0 25px rgba(220, 38, 38, 0.35),
+    inset 0 1px 0 rgba(254, 202, 202, 0.22) !important;
+}
+
+.theme-dracula .glow-text-cyan {
+  text-shadow: 0 0 10px rgba(239, 68, 68, 0.8), 0 0 20px rgba(185, 28, 28, 0.5) !important;
+  color: #fca5a5 !important;
+}
+
+.theme-dracula .glow-text-purple {
+  text-shadow: 0 0 10px rgba(185, 28, 28, 0.8), 0 0 20px rgba(127, 29, 29, 0.5) !important;
+  color: #ef4444 !important;
+}
+
+.theme-dracula .pulse-glow-cyan {
+  box-shadow: 0 0 18px rgba(220, 38, 38, 0.6), 0 0 28px rgba(185, 28, 28, 0.4) !important;
+}
+
+.theme-dracula .text-indigo-400 { color: #f87171 !important; }
+.theme-dracula .text-indigo-500 { color: #ef4444 !important; }
+.theme-dracula .text-indigo-600 { color: #dc2626 !important; }
+.theme-dracula .bg-indigo-600 { 
+  background-color: #991b1b !important; 
+  color: #ffffff !important; 
+}
+.theme-dracula .bg-indigo-500 { 
+  background-color: #b91c1c !important; 
+  color: #ffffff !important;
+}
+.theme-dracula .border-indigo-500\/30 { border-color: rgba(220, 38, 38, 0.45) !important; }
+.theme-dracula .hover\:bg-indigo-500\/10:hover { background-color: rgba(185, 28, 28, 0.18) !important; }
+
+.theme-dracula .sidebar-badge.active {
+  background-color: rgba(185, 28, 28, 0.3) !important;
+  color: #fca5a5 !important;
+  border-color: rgba(239, 68, 68, 0.6) !important;
+  box-shadow: 0 0 12px rgba(220, 38, 38, 0.4) !important;
+}
+
+.theme-dracula .sidebar-nav-item.active {
+  background-color: rgba(153, 27, 27, 0.22) !important;
+  border-right-color: #dc2626 !important;
+  box-shadow: inset -3px 0 14px rgba(220, 38, 38, 0.35) !important;
+}
+
+.theme-dracula .sidebar-nav-item.active * {
+  color: #fca5a5 !important;
+}
+
+/* --------------------------------------------------------------------------
+   Dripping Blood Keyframe Animations - انیمیشن‌های چکیدن و کش‌آمدن خون
+   -------------------------------------------------------------------------- */
+@keyframes draculaBloodPulse {
+  0%, 100% {
+    filter: drop-shadow(0 2px 4px rgba(185, 28, 28, 0.85)) drop-shadow(0 4px 8px rgba(127, 29, 29, 0.55));
+    transform: scaleY(1);
+  }
+  50% {
+    filter: drop-shadow(0 3px 6px rgba(239, 68, 68, 0.95)) drop-shadow(0 6px 12px rgba(185, 28, 28, 0.75));
+    transform: scaleY(1.15);
+  }
+}
+
+@keyframes draculaBloodDropFall {
+  0% {
+    top: 100%;
+    transform: translate(-50%, 0) scale(0.6, 0.7);
+    opacity: 0;
+  }
+  15% {
+    transform: translate(-50%, 2px) scale(0.9, 1.2);
+    opacity: 0.95;
+  }
+  40% {
+    transform: translate(-50%, 5px) scale(1, 1.5);
+    opacity: 1;
+  }
+  60% {
+    transform: translate(-50%, 15px) scale(0.85, 2.2);
+    opacity: 0.95;
+  }
+  80% {
+    transform: translate(-50%, 25px) scale(0.6, 2.5);
+    opacity: 0.7;
+  }
+  100% {
+    top: 100%;
+    transform: translate(-50%, 32px) scale(0.3, 1.0);
+    opacity: 0;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Dripping Blood Effect on All Buttons - افکت خون‌چکان از زیر دکمه‌ها
+   -------------------------------------------------------------------------- */
+.theme-dracula button:not([data-no-drip="true"]),
+.theme-dracula a[role="button"]:not([data-no-drip="true"]),
+.theme-dracula .btn:not([data-no-drip="true"]) {
+  position: relative !important;
+  overflow: visible !important;
+  border-bottom: 2px solid #b91c1c !important;
+  box-shadow: 
+    0 4px 12px rgba(185, 28, 28, 0.35),
+    inset 0 1px 0 rgba(254, 202, 202, 0.2),
+    inset 0 -2px 6px rgba(127, 29, 29, 0.6) !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease !important;
+}
+
+/* ردیف قطرات و لایه‌های خون چکنده در لبه پایینی دکمه */
+.theme-dracula button:not([data-no-drip="true"])::after,
+.theme-dracula a[role="button"]:not([data-no-drip="true"])::after,
+.theme-dracula .btn:not([data-no-drip="true"])::after {
+  content: '' !important;
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: -8px !important;
+  height: 9px !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 18' preserveAspectRatio='none'%3E%3Cpath d='M0,0 L120,0 L120,3 C116,3 113,5 111,8 C109,11 107,17 105,17 C103,17 101,11 99,6 C97,3 93,3 90,3 C86,3 83,7 81,11 C79,14 77,15 75,15 C73,15 71,11 69,7 C67,3 63,3 60,3 C56,3 53,8 51,13 C49,18 47,18 45,14 C43,9 41,3 37,3 C33,3 30,7 28,11 C26,14 24,14 22,14 C20,14 18,10 16,6 C14,3 10,3 7,3 C4,3 2,7 0,10 Z' fill='%23dc2626'/%3E%3C/svg%3E") !important;
+  background-size: 70px 9px !important;
+  background-repeat: repeat-x !important;
+  pointer-events: none !important;
+  z-index: 25 !important;
+  opacity: 0.95 !important;
+  filter: drop-shadow(0 2px 4px rgba(185, 28, 28, 0.85)) !important;
+  transition: bottom 0.25s ease, height 0.25s ease, filter 0.25s ease !important;
+}
+
+/* قطره زنده آویزان و در حال چکیدن به سمت پایین */
+.theme-dracula button:not([data-no-drip="true"])::before,
+.theme-dracula a[role="button"]:not([data-no-drip="true"])::before,
+.theme-dracula .btn:not([data-no-drip="true"])::before {
+  content: '' !important;
+  position: absolute !important;
+  left: 28% !important;
+  width: 5px !important;
+  height: 8px !important;
+  background: radial-gradient(circle at 35% 30%, #ff4d6d 0%, #dc2626 50%, #450a0a 100%) !important;
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40% !important;
+  pointer-events: none !important;
+  z-index: 26 !important;
+  opacity: 0;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.85) !important;
+  animation: draculaBloodDropFall 3.4s infinite cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* حالت هاور: کش آمدن قطرات، افزایش درخشش و سرعت چکیدن خون */
+.theme-dracula button:not([data-no-drip="true"]):hover,
+.theme-dracula a[role="button"]:not([data-no-drip="true"]):hover,
+.theme-dracula .btn:not([data-no-drip="true"]):hover {
+  border-bottom-color: #ef4444 !important;
+  box-shadow: 
+    0 6px 18px rgba(220, 38, 38, 0.6),
+    inset 0 1px 0 rgba(254, 202, 202, 0.35),
+    inset 0 -3px 8px rgba(153, 27, 27, 0.8) !important;
+}
+
+.theme-dracula button:not([data-no-drip="true"]):hover::after,
+.theme-dracula a[role="button"]:not([data-no-drip="true"]):hover::after,
+.theme-dracula .btn:not([data-no-drip="true"]):hover::after {
+  bottom: -11px !important;
+  height: 12px !important;
+  filter: drop-shadow(0 3px 6px rgba(239, 68, 68, 1)) drop-shadow(0 0 10px rgba(220, 38, 38, 0.8)) !important;
+  animation: draculaBloodPulse 1.8s infinite ease-in-out !important;
+}
+
+.theme-dracula button:not([data-no-drip="true"]):hover::before,
+.theme-dracula a[role="button"]:not([data-no-drip="true"]):hover::before,
+.theme-dracula .btn:not([data-no-drip="true"]):hover::before {
+  animation-duration: 1.8s !important;
+}
+
+/* دکمه‌های با اولویت بالا و اکشن اصلی (Primary Buttons) */
+.theme-dracula .btn-primary,
+.theme-dracula button.bg-indigo-600,
+.theme-dracula button.bg-indigo-500,
+.theme-dracula button.bg-sky-600,
+.theme-dracula button.bg-emerald-600 {
+  background: linear-gradient(180deg, #b91c1c 0%, #7f1d1d 100%) !important;
+  border-color: #ef4444 !important;
+  color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8) !important;
+}
+
+.theme-dracula .btn-primary:hover,
+.theme-dracula button.bg-indigo-600:hover,
+.theme-dracula button.bg-indigo-500:hover,
+.theme-dracula button.bg-sky-600:hover,
+.theme-dracula button.bg-emerald-600:hover {
+  background: linear-gradient(180deg, #dc2626 0%, #991b1b 100%) !important;
+  border-color: #f87171 !important;
+}
+
+/* --------------------------------------------------------------------------
+   Cisco Terminal & Chassis in Dracula Mode
+   -------------------------------------------------------------------------- */
+.theme-dracula .cisco-terminal-screen {
+  background-color: #060102 !important;
+  color: #fee2e2 !important;
+  border-color: rgba(220, 38, 38, 0.45) !important;
+  box-shadow: 0 0 25px rgba(185, 28, 28, 0.16), inset 0 0 20px rgba(127, 29, 29, 0.08) !important;
+}
+
+.theme-dracula .cisco-cli-input {
+  color: #fee2e2 !important;
+  caret-color: #ef4444 !important;
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.5) !important;
+}
+
+.theme-dracula .cisco-cli-input::placeholder {
+  color: rgba(248, 113, 113, 0.4) !important;
+}
+
+.theme-dracula .terminal-header-ip {
+  background-color: rgba(220, 38, 38, 0.18) !important;
+  color: #fca5a5 !important;
+  border: 1px solid #ef4444 !important;
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.6) !important;
+}
+
+.theme-dracula .terminal-header-ssh {
+  background-color: rgba(185, 28, 28, 0.22) !important;
+  color: #ef4444 !important;
+  border: 1px solid #dc2626 !important;
+  text-shadow: 0 0 8px rgba(220, 38, 38, 0.6) !important;
+}
+
+.theme-dracula .cisco-terminal-header-btn {
+  background-color: #120205 !important;
+  color: #fee2e2 !important;
+  border: 1px solid rgba(220, 38, 38, 0.4) !important;
+  box-shadow: 0 0 10px rgba(185, 28, 28, 0.2) !important;
+}
+
+.theme-dracula .cisco-terminal-header-btn:hover {
+  background-color: #220409 !important;
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.45) !important;
+}
+
+.theme-dracula .cisco-terminal-header-btn svg {
+  color: #ef4444 !important;
+}
+
+.theme-dracula .switch-faceplate-chassis {
+  background-color: #0b0204 !important;
+  border-color: rgba(220, 38, 38, 0.4) !important;
+  box-shadow: 0 0 25px rgba(185, 28, 28, 0.15) !important;
+}
+
+.theme-dracula .switch-faceplate-grid {
+  background-color: #050102 !important;
+  border-color: rgba(185, 28, 28, 0.35) !important;
+}
+
+/* Scrollbars in Dracula Theme */
+.theme-dracula ::-webkit-scrollbar-thumb {
+  background-color: #7f1d1d !important;
+  border-color: #090204 !important;
+}
+.theme-dracula ::-webkit-scrollbar-thumb:hover {
+  background-color: #b91c1c !important;
+}
+
 .theme-light .sidebar-nav-item.active {
   background-color: rgba(99, 102, 241, 0.12) !important;
   color: #4338ca !important;
@@ -576,6 +878,9 @@
 .theme-amber .modal-backdrop-blur,
 .theme-cobalt .modal-backdrop-blur,
 .theme-cyberpunk .modal-backdrop-blur,
+.theme-dracula .modal-backdrop-blur,
+.theme-dracula [data-modal-backdrop="true"],
+.theme-dracula .modal-glass-backdrop,
 .theme-obsidian .modal-backdrop-blur {
   background-color: rgba(2, 6, 23, 0.78) !important;
   backdrop-filter: blur(12px) !important;
@@ -1345,7 +1650,9 @@
 .theme-amber .chart-custom-tooltip,
 .theme-cobalt .chart-custom-tooltip,
 .theme-cyberpunk .chart-custom-tooltip,
-.theme-cyberpunk .recharts-tooltip-wrapper .chart-custom-tooltip {
+.theme-cyberpunk .recharts-tooltip-wrapper .chart-custom-tooltip,
+.theme-dracula .chart-custom-tooltip,
+.theme-dracula .recharts-tooltip-wrapper .chart-custom-tooltip {
   background-color: #090d16 !important;
   border: 1px solid #334155 !important;
   border-radius: 1rem !important;

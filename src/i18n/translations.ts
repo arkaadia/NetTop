@@ -23,6 +23,7 @@ export const translations = {
     theme_rose: 'Rose Crimson (Cyber)',
     theme_amber: 'Neon Amber (Golden)',
     theme_cyberpunk: 'Cyberpunk 2077 (Neon Yellow & Magenta)',
+    theme_dracula: 'Bloody Dracula (Gothic Blood Drip)',
     theme_light: 'Clear Light (Light)',
 
     // Language
@@ -704,6 +705,7 @@ export const translations = {
     theme_rose: 'رز کریمسون (سایبر)',
     theme_amber: 'کهربایی نئون (زرین)',
     theme_cyberpunk: 'سایبرپانک (نئون زرد و سرخابی)',
+    theme_dracula: 'دراکولا خونی (خون‌چکان / Gothic Blood)',
     theme_light: 'شفاف روشن (Light)',
 
     // Language
