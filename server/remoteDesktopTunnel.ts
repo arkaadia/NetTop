@@ -6,10 +6,11 @@ import { WebSocketServer, WebSocket } from 'ws';
 /**
  * Guacamole protocol instruction encoder
  * Instructions follow the pattern: <length>.<string>,<length>.<string>;
+ * In Guacamole protocol, <length> prefix is the count of Unicode characters (code points).
  */
 export function encodeInstruction(opcode: string, ...args: (string | number | undefined | null)[]): string {
   const elements = [opcode, ...args.map(a => (a === undefined || a === null ? '' : String(a)))];
-  return elements.map(elem => `${elem.length}.${elem}`).join(',') + ';';
+  return elements.map(elem => `${Array.from(elem).length}.${elem}`).join(',') + ';';
 }
 
 /**
@@ -309,8 +310,9 @@ export function setupRemoteDesktopWebSocketServer(server: http.Server | WebSocke
       console.log(`[Remote Desktop][Session ${session.session_id}] Connected to guacd daemon at ${guacdHost}:${guacdPort}`);
       // Step 1: Send select instruction for RDP protocol
       const selectInst = encodeInstruction('select', 'rdp');
-      console.log(`[Remote Desktop][Session ${session.session_id}] -> guacd: ${selectInst.trim()}`);
-      guacdSocket?.write(selectInst);
+      const selectBuf = Buffer.from(selectInst, 'utf8');
+      console.log(`[Remote Desktop][Session ${session.session_id}] -> guacd select instruction: "${selectInst.trim()}" (raw hex: ${selectBuf.toString('hex')}, byteLength: ${selectBuf.length})`);
+      guacdSocket?.write(selectBuf);
       // Gated state: strictly wait for 'args;' from guacd before sending size/connect
       handshakeState = 'waiting_args';
     });
@@ -335,6 +337,12 @@ export function setupRemoteDesktopWebSocketServer(server: http.Server | WebSocke
 
     guacdSocket.on('data', (chunk) => {
       const chunkStr = chunk.toString('utf8');
+
+      // Diagnostic logging of raw bytes during handshake
+      if (handshakeState !== 'connected') {
+        const previewHex = chunk.toString('hex').substring(0, 60);
+        console.log(`[Remote Desktop][Session ${session.session_id}] <- guacd handshake raw [len=${chunk.length}, hex=${previewHex}${chunk.length > 30 ? '...' : ''}]: "${chunkStr.trim()}"`);
+      }
 
       // If already connected, pass raw data directly to browser WebSocket
       if (handshakeState === 'connected') {
@@ -399,6 +407,17 @@ export function setupRemoteDesktopWebSocketServer(server: http.Server | WebSocke
             const errorMsg = instruction[1] || 'guacd handshake error';
             const errorCode = parseInt(instruction[2] || '518', 10);
             console.error(`[Remote Desktop][Session ${session.session_id}] <- guacd ERROR in waiting_args: ${errorMsg} (${errorCode})`);
+            if (errorCode === 512 || /not installed|not supported/i.test(errorMsg)) {
+              console.error(`\n================== [GUACD RDP DIAGNOSTIC ALERT] ==================`);
+              console.error(`[Guacamole Daemon Error] guacd reported code 512 (UNSUPPORTED): "${errorMsg}"`);
+              console.error(`[Root Cause] The guacd daemon at ${guacdHost}:${guacdPort} was installed without the RDP client plugin (libguac-client-rdp.so).`);
+              console.error(`[Fix for Ubuntu/Debian native]:`);
+              console.error(`   sudo apt update && sudo apt install -y libguac-client-rdp0`);
+              console.error(`   sudo systemctl restart guacd`);
+              console.error(`[Fix with Docker]:`);
+              console.error(`   docker run -d --name nettop-guacd --restart unless-stopped -p 4822:4822 guacamole/guacd:1.5.5`);
+              console.error(`==================================================================\n`);
+            }
             if (ws.readyState === WebSocket.OPEN) {
               ws.send(encodeInstruction('error', errorMsg, errorCode));
               ws.close(1011, errorMsg);
