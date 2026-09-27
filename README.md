@@ -213,13 +213,19 @@ A Comprehensive Network Topology, Cisco Switch/Router Management & Visual Config
 ### ۱۵. ماژول تست ریموت و اتصال زنده ریموت دسکتاپ ویندوز (Remote Test / Windows RDP)
 - **ارتباط زنده RDP بدون هیچ‌گونه شبیه‌سازی یا دیتای ساختگی:**
   - اتصال ریموت دسکتاپ مرورگری به ماشین‌های ویندوز سرور و کلاینت بر بستر استاندارد **Apache Guacamole** و دیمن `guacd:4822`.
-- **ترجمه آنی پروتکل به HTML5 Canvas و وب‌سوکت دوطرفه:**
-  - مسیر استریم `/ws/remote-desktop` همراه با انتقال بلادرنگ تصویر دسکتاپ، ماوس، کیبورد، اسکرول و ژست‌های لمسی.
+- **هندشیک ترتیبی و گیت‌شده پروتکل Guacamole در سرور نودجی‌اس:**
+  - رفع کامل باگ صفحه سیاه ناشی از ارسال نابهنگام `size` و `connect`؛ سرور اکنون به درستی منتظر پاسخ `args;` از `guacd` مانده، اسامی پارامترها را استخراج کرده و مقادیر را دقیقاً مطابق با ترتیب درخواستی `guacd` می‌چیند.
+  - ثبت لاگ کامل و ماسک‌شده (پنهان‌سازی کلمه عبور) دستورات مبادله‌شده جهت عیب‌یابی دقیق در ترمینال سرور.
+- **اندازه‌گیری دقیق ابعاد کانتینر در فرانت‌اند و مقیاس‌پذیری پویا:**
+  - محاسبه ابعاد واقعی کانتینر رندر از روی `displayContainerRef` بعد از مانت کامل، بررسی حداقل ابعاد (۱۰۰ پیکسل) جهت ممانعت از رندر نامعتبر، و انطباق مقیاس خودکار با `ResizeObserver`.
+- **تفکیک دقیق وضعیت‌های اتصال و هندلینگ پیشرفته خطاها:**
+  - فعال‌سازی وضعیت «متصل» (Connected) منحصراً بر اساس رویداد `client.onstatechange` با کد `Guacamole.Client.STATE_CONNECTED` و نمایش وضعیت مجزای «در حال برقراری اتصال...» (Connecting).
+  - هندلر سراسری `client.onerror` و `tunnel.onerror` با ترجمه دقیق خطاهای NLA/CredSSP، انقضای توکن، رد گواهی TLS و بسته‌شدن پورت RDP سرور ویندوز.
 - **امکانات حرفه‌ای سشن ریموت:**
   - ارسال مستقیم ماکروی `Ctrl + Alt + Delete`
   - کلید اختصاصی `Windows Key (Super)`
   - همگام‌سازی دوطرفه حافظه کلیپ‌بورد (Clipboard Sync) بین مرورگر و ویندوز هدف
-  - پشتیبانی از حالت تمام‌صفحه (Fullscreen) و مقیاس‌پذیری خودکار رزولوشن دسکتاپ
+  - پشتیبانی از حالت تمام‌صفحه (Fullscreen) و تغییر مقیاس تصویر
 - **بانک اختصاصی تجهیزات ویندوز و تست عیب‌یابی پورت:**
   - ثبت مشخصات ماشین‌ها (IP، پورت پیش‌فرض ۳۳۸۹ یا پورت‌های دلخواه، نام کاربری و دامنه).
   - دکمه **Test Connection** برای اعتبارسنجی زنده پورت TCP ۳۳۸۹ و محاسبه میلی‌ثانیه‌ای تاخیر قبل از ورود به سشن.
@@ -676,8 +682,14 @@ npm start
 ### 15. Remote Test & Live Windows Remote Desktop (RDP / Apache Guacamole)
 - **Zero Simulation / Real In-Browser Windows RDP Experience:**
   - Browser-based Remote Desktop to Windows workstations and servers powered by the official **Apache Guacamole** protocol engine and `guacd:4822` daemon.
-- **HTML5 Canvas & Bidirectional WebSocket Streaming:**
-  - Dedicated streaming pipeline via `/ws/remote-desktop` delivering smooth display rendering, low-latency mouse tracking, full keyboard input, scrolling, and touch events.
+- **Strictly Gated Guacamole Handshake in Node.js Gateway:**
+  - Complete resolution of black-screen issues caused by premature instruction dispatching; the server now strictly waits for `args;` from `guacd`, extracts parameter names dynamically, and maps values strictly according to guacd's requested order rather than hardcoded arrays.
+  - Comprehensive instruction debugging logs in console with automatic password masking for end-to-end auditability.
+- **Accurate Container Dimension Measurement & Dynamic Scaling:**
+  - `displayContainerRef` is measured after complete DOM mount with a minimum dimension guard (>= 100px) preventing invalid initial resolutions, coupled with a responsive `ResizeObserver` for dynamic aspect ratio and viewport scaling.
+- **Accurate Connection State Machine & Diagnostic Error Handling:**
+  - UI only enters "Connected" upon receiving `Guacamole.Client.STATE_CONNECTED` event; intermediate `STATE_CONNECTING` provides an informative animated overlay.
+  - Comprehensive `client.onerror` and `tunnel.onerror` handlers capturing and translating upstream NLA / CredSSP failures, certificate rejections, expired session tokens, or closed RDP ports into clear diagnostic messages.
 - **Full In-Session Desktop Controls:**
   - One-click `Ctrl + Alt + Delete` macro injection.
   - Dedicated `Windows Key (Super)` trigger.

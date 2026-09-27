@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Guacamole from 'guacamole-common-js';
 import {
   Monitor,
@@ -8,14 +8,10 @@ import {
   Clipboard,
   RefreshCw,
   Clock,
-  Shield,
   AlertTriangle,
-  Terminal,
   Keyboard as KeyboardIcon,
   Check,
   X,
-  Volume2,
-  VolumeX,
   Sparkles
 } from 'lucide-react';
 import { RemoteDevice, RemoteSessionResponse } from '../../types/remoteDesktop';
@@ -29,18 +25,70 @@ interface RemoteDesktopSessionViewProps {
   onReconnect: () => void;
 }
 
+/**
+ * Format Guacamole error code and message into human-readable Persian/English text
+ */
+function formatGuacamoleError(
+  code: number | undefined,
+  rawMsg: string | undefined,
+  device: RemoteDevice,
+  isRtl: boolean
+): string {
+  const codeNum = typeof code === 'number' ? code : parseInt(String(code), 10);
+  switch (codeNum) {
+    case 518: // UPSTREAM_ERROR
+      return isRtl
+        ? `خطا در ارتباط RDP با سرور ویندوز (${device.hostname}:${device.port}): ممکن است احراز هویت NLA/CredSSP ناموفق بوده، کاربر یا کلمه عبور اشتباه باشد، یا سرور ویندوز اتصال ریموت را رد کرده است.`
+        : `Upstream RDP error connecting to ${device.hostname}:${device.port}. Verify NLA / CredSSP credentials, account permissions, and Windows Remote Desktop settings.`;
+    case 516: // UPSTREAM_UNAVAILABLE
+      return isRtl
+        ? `سرور مقصد ${device.hostname} روی پورت ${device.port} در دسترس نیست یا ارتباط با پراکسی guacd برقرار نشد. مطمئن شوید سرویس Remote Desktop و فایروال ویندوز پورت ۳۳۸۹ را باز گذاشته‌اند.`
+        : `Upstream RDP host ${device.hostname}:${device.port} is unreachable or guacd daemon is offline. Ensure Windows Remote Desktop service is enabled and firewall allows port ${device.port}.`;
+    case 513: // SERVER_ERROR / UNAUTHORIZED
+      return isRtl
+        ? `احراز هویت نشست ناموفق بود یا توکن منقضی شده است.`
+        : `Session authorization failed or security token has expired.`;
+    case 515: // UPSTREAM_TIMEOUT
+      return isRtl
+        ? `مهلت زمان ارتباط با سرور ویندوز به پایان رسید (Connection Timeout روی ${device.hostname}:${device.port}).`
+        : `Connection to upstream Windows host ${device.hostname}:${device.port} timed out.`;
+    case 512: // UNSUPPORTED
+      return isRtl
+        ? `پروتکل RDP توسط سرویس پراکسی پشتیبانی نمی‌شود.`
+        : `RDP protocol is not supported by the Guacamole proxy.`;
+    default:
+      if (rawMsg) {
+        if (/NLA|CredSSP/i.test(rawMsg)) {
+          return isRtl
+            ? `خطای احراز هویت سطح شبکه (NLA/CredSSP): سرور ویندوز نیازمند اعتبارسنجی شبکه قبل از اتصال است (${rawMsg}).`
+            : `Network Level Authentication (NLA/CredSSP) error: ${rawMsg}`;
+        }
+        if (/cert/i.test(rawMsg)) {
+          return isRtl
+            ? `خطای گواهی امنیتی TLS/SSL سرور ویندوز: ${rawMsg}`
+            : `TLS certificate verification error: ${rawMsg}`;
+        }
+        return rawMsg;
+      }
+      return isRtl
+        ? `خطای نامشخص در ارتباط با ریموت دسکتاپ (کد خطای ${code || 'Unknown'}).`
+        : `Unknown remote desktop connection error (code: ${code || 'Unknown'}).`;
+  }
+}
+
 export const RemoteDesktopSessionView: React.FC<RemoteDesktopSessionViewProps> = ({
   session,
   device,
   onClose,
   onReconnect
 }) => {
-  const { t, isRtl } = useLanguage();
+  const { isRtl } = useLanguage();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const displayContainerRef = useRef<HTMLDivElement>(null);
   const clientRef = useRef<any>(null);
   const tunnelRef = useRef<any>(null);
+  const connectionStateRef = useRef<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
 
   const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -49,7 +97,12 @@ export const RemoteDesktopSessionView: React.FC<RemoteDesktopSessionViewProps> =
   const [isClipboardOpen, setIsClipboardOpen] = useState(false);
   const [clipboardText, setClipboardText] = useState('');
   const [clipboardCopied, setClipboardCopied] = useState(false);
-  const [scaleMode, setScaleMode] = useState<'fit' | 'native'>('fit');
+  const [scaleMode] = useState<'fit' | 'native'>('fit');
+
+  // Keep ref in sync for event callbacks
+  useEffect(() => {
+    connectionStateRef.current = connectionState;
+  }, [connectionState]);
 
   // Session duration timer
   useEffect(() => {
@@ -74,131 +127,217 @@ export const RemoteDesktopSessionView: React.FC<RemoteDesktopSessionViewProps> =
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  // Initialize Guacamole Client
+  // Initialize and Mount Guacamole Client
   useEffect(() => {
-    if (!displayContainerRef.current) return;
-
     let isSubscribed = true;
+    let resizeObserver: ResizeObserver | null = null;
 
-    // Determine WebSocket endpoint
-    const loc = window.location;
-    const wsProto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsHost = loc.host;
-    const wsUrl = `${wsProto}//${wsHost}/ws/remote-desktop?token=${encodeURIComponent(session.token)}&width=${window.innerWidth}&height=${window.innerHeight}&dpi=96`;
+    const initConnection = () => {
+      if (!displayContainerRef.current) return;
+      const container = displayContainerRef.current;
 
-    console.log('[Guacamole Client] Initializing WebSocket tunnel on:', wsUrl);
+      // 1. Measure real dimensions of displayContainerRef
+      const rect = container.getBoundingClientRect();
+      let measuredWidth = Math.floor(rect.width);
+      let measuredHeight = Math.floor(rect.height);
 
-    try {
-      // 1. Create WebSocket Tunnel
-      const tunnel = new Guacamole.WebSocketTunnel(wsUrl);
-      tunnelRef.current = tunnel;
-
-      // 2. Instantiate Guacamole Client
-      const client = new Guacamole.Client(tunnel);
-      clientRef.current = client;
-
-      // 3. Mount Display Element to DOM
-      const display = client.getDisplay();
-      const displayElem = display.getElement();
-      displayElem.style.display = 'block';
-      displayElem.style.margin = '0 auto';
-      displayElem.style.cursor = 'default';
-
-      // Clear previous canvas if any
-      if (displayContainerRef.current) {
-        displayContainerRef.current.innerHTML = '';
-        displayContainerRef.current.appendChild(displayElem);
+      if (measuredWidth < 100 || measuredHeight < 100) {
+        measuredWidth = container.clientWidth || containerRef.current?.clientWidth || 0;
+        measuredHeight = container.clientHeight || containerRef.current?.clientHeight || 0;
       }
 
-      // 4. State Change Listener
-      client.onstatechange = (state: number) => {
-        if (!isSubscribed) return;
-        console.log('[Guacamole Client] State changed to:', state);
-        // Guacamole.Client.State:
-        // 0: IDLE, 1: CONNECTING, 2: WAITING, 3: CONNECTED, 4: DISCONNECTING, 5: DISCONNECTED
-        if (state === 3) {
-          setConnectionState('connected');
-          setErrorMessage(null);
-        } else if (state === 1 || state === 2) {
-          setConnectionState('connecting');
-        } else if (state === 5) {
-          setConnectionState(prev => (prev === 'error' ? 'error' : 'disconnected'));
-        }
-      };
-
-      // 5. Error Handler
-      client.onerror = (status: any) => {
-        if (!isSubscribed) return;
-        console.error('[Guacamole Client] Error occurred:', status);
+      // Check if dimension is smaller than acceptable minimum (< 100px)
+      if (measuredWidth < 100 || measuredHeight < 100) {
+        console.error('[Guacamole Client] Container dimension too small:', measuredWidth, measuredHeight);
         setConnectionState('error');
-        const code = status.code || status;
-        let message = status.message || `Guacamole client error (Code ${code})`;
-        if (code === 516 || code === 518) {
-          message = `Cannot reach Apache Guacamole daemon (guacd) or Windows RDP host ${device.hostname}:${device.port}. Verify guacd container is running.`;
-        } else if (code === 513) {
-          message = 'Authentication failed or session token expired.';
-        }
-        setErrorMessage(message);
-      };
+        setErrorMessage(
+          isRtl
+            ? `ابعاد کانتینر نمایش ریموت دسکتاپ کمتر از حد مجاز است (${measuredWidth}x${measuredHeight} پیکسل). لطفاً اندازه پنجره را افزایش دهید.`
+            : `Remote desktop display container dimension is too small (${measuredWidth}x${measuredHeight}px). Minimum 100x100px required.`
+        );
+        return;
+      }
 
-      // 6. Clipboard sync from remote Windows
-      client.onclipboard = (stream: any, mimetype: string) => {
-        if (/^text\//.test(mimetype)) {
-          let text = '';
-          const reader = new Guacamole.StringReader(stream);
-          reader.ontext = (chunk: string) => { text += chunk; };
-          reader.onend = () => {
-            if (isSubscribed) setClipboardText(text);
-          };
-        }
-      };
+      const initialDpi = Math.min(192, Math.max(96, Math.round((window.devicePixelRatio || 1) * 96)));
 
-      // 7. Mouse Handling
-      const mouse = new Guacamole.Mouse(displayElem);
-      mouse.onmousedown = mouse.onmouseup = mouse.onmousemove = (mouseState: any) => {
-        client.sendMouseState(mouseState);
-      };
+      // Determine WebSocket endpoint with measured dimensions
+      const loc = window.location;
+      const wsProto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsHost = loc.host;
+      const wsUrl = `${wsProto}//${wsHost}/ws/remote-desktop?token=${encodeURIComponent(session.token)}&width=${measuredWidth}&height=${measuredHeight}&dpi=${initialDpi}`;
 
-      // 8. Keyboard Handling
-      const keyboard = new Guacamole.Keyboard(document);
-      keyboard.onkeydown = (keysym: number) => {
-        client.sendKeyEvent(1, keysym);
-        return false;
-      };
-      keyboard.onkeyup = (keysym: number) => {
-        client.sendKeyEvent(0, keysym);
-        return false;
-      };
+      console.log(`[Guacamole Client] Initializing WebSocket tunnel on ${wsUrl} (measured: ${measuredWidth}x${measuredHeight}, dpi: ${initialDpi})`);
 
-      // 9. Window and Container Resize
-      const updateSize = () => {
-        if (!displayContainerRef.current || !clientRef.current) return;
-        const rect = displayContainerRef.current.getBoundingClientRect();
-        const w = Math.floor(rect.width);
-        const h = Math.floor(rect.height);
-        if (w > 100 && h > 100) {
-          client.sendSize(w, h);
-        }
-      };
+      try {
+        // 2. Create WebSocket Tunnel
+        const tunnel = new Guacamole.WebSocketTunnel(wsUrl);
+        tunnelRef.current = tunnel;
 
-      window.addEventListener('resize', updateSize);
+        // Tunnel error handler
+        tunnel.onerror = (status: any) => {
+          if (!isSubscribed) return;
+          console.error('[Guacamole Tunnel] Tunnel error:', status);
+          setConnectionState('error');
+          const code = typeof status === 'object' ? status.code : status;
+          const msg = typeof status === 'object' ? status.message : String(status);
+          setErrorMessage(formatGuacamoleError(code, msg, device, isRtl));
+        };
 
-      // Connect to tunnel
-      client.connect();
+        // Tunnel state handler
+        tunnel.onstatechange = (state: number) => {
+          if (!isSubscribed) return;
+          console.log('[Guacamole Tunnel] State changed to:', state);
+          // State 3: CLOSED
+          if (state === 3 && connectionStateRef.current !== 'connected') {
+            setConnectionState('error');
+            setErrorMessage(prev => prev || (isRtl ? 'اتصال تونل وب‌سوکت قطع شد.' : 'WebSocket tunnel closed unexpectedly.'));
+          }
+        };
 
-      return () => {
-        isSubscribed = false;
-        window.removeEventListener('resize', updateSize);
+        // 3. Instantiate Guacamole Client
+        const client = new Guacamole.Client(tunnel);
+        clientRef.current = client;
+
+        // 4. Mount Display Element to DOM
+        const display = client.getDisplay();
+        const displayElem = display.getElement();
+        displayElem.style.display = 'block';
+        displayElem.style.margin = '0 auto';
+        displayElem.style.cursor = 'default';
+
+        // Clear previous canvas if any
+        container.innerHTML = '';
+        container.appendChild(displayElem);
+
+        // Adjust display scaling so remote screen fits within container
+        const adjustScale = (remoteW?: number, remoteH?: number) => {
+          if (!displayContainerRef.current || !clientRef.current) return;
+          const d = clientRef.current.getDisplay();
+          const rw = remoteW || d.getWidth();
+          const rh = remoteH || d.getHeight();
+          if (rw <= 0 || rh <= 0) return;
+
+          const cw = displayContainerRef.current.clientWidth;
+          const ch = displayContainerRef.current.clientHeight;
+          if (cw <= 0 || ch <= 0) return;
+
+          if (scaleMode === 'fit') {
+            const scale = Math.min(cw / rw, ch / rh, 1);
+            d.scale(scale);
+          } else {
+            d.scale(1);
+          }
+        };
+
+        // On remote resolution resize notification from server
+        display.onresize = (w: number, h: number) => {
+          console.log(`[Guacamole Display] Remote resolution changed to: ${w}x${h}`);
+          adjustScale(w, h);
+        };
+
+        // 5. State Change Listener strictly adhering to Guacamole.Client states
+        client.onstatechange = (state: number) => {
+          if (!isSubscribed) return;
+          console.log('[Guacamole Client] State changed to:', state);
+          // Guacamole.Client.State:
+          // 0: IDLE, 1: CONNECTING, 2: WAITING, 3: CONNECTED, 4: DISCONNECTING, 5: DISCONNECTED
+          if (state === 3) {
+            // STATE_CONNECTED: Only here do we declare connected status
+            setConnectionState('connected');
+            setErrorMessage(null);
+            adjustScale();
+          } else if (state === 1 || state === 2) {
+            // STATE_CONNECTING / STATE_WAITING: Intermediate connecting status
+            setConnectionState('connecting');
+          } else if (state === 4) {
+            // STATE_DISCONNECTING
+          } else if (state === 5) {
+            // STATE_DISCONNECTED
+            setConnectionState(prev => (prev === 'error' ? 'error' : 'disconnected'));
+          }
+        };
+
+        // 6. Client Error Handler with real error messages
+        client.onerror = (status: any) => {
+          if (!isSubscribed) return;
+          console.error('[Guacamole Client] Client error:', status);
+          setConnectionState('error');
+          const code = typeof status === 'object' ? status.code : status;
+          const msg = typeof status === 'object' ? status.message : String(status);
+          setErrorMessage(formatGuacamoleError(code, msg, device, isRtl));
+        };
+
+        // 7. Clipboard sync from remote Windows
+        client.onclipboard = (stream: any, mimetype: string) => {
+          if (/^text\//.test(mimetype)) {
+            let text = '';
+            const reader = new Guacamole.StringReader(stream);
+            reader.ontext = (chunk: string) => { text += chunk; };
+            reader.onend = () => {
+              if (isSubscribed) setClipboardText(text);
+            };
+          }
+        };
+
+        // 8. Mouse Handling
+        const mouse = new Guacamole.Mouse(displayElem);
+        mouse.onmousedown = mouse.onmouseup = mouse.onmousemove = (mouseState: any) => {
+          client.sendMouseState(mouseState);
+        };
+
+        // 9. Keyboard Handling
+        const keyboard = new Guacamole.Keyboard(document);
+        keyboard.onkeydown = (keysym: number) => {
+          client.sendKeyEvent(1, keysym);
+          return false;
+        };
+        keyboard.onkeyup = (keysym: number) => {
+          client.sendKeyEvent(0, keysym);
+          return false;
+        };
+
+        // 10. Container Resize Observer
+        resizeObserver = new ResizeObserver((entries) => {
+          for (const entry of entries) {
+            const { width, height } = entry.contentRect;
+            const w = Math.floor(width);
+            const h = Math.floor(height);
+            if (w > 100 && h > 100 && clientRef.current) {
+              clientRef.current.sendSize(w, h);
+              adjustScale();
+            }
+          }
+        });
+        resizeObserver.observe(container);
+
+        // Connect to tunnel
+        client.connect();
+
+      } catch (err: any) {
+        console.error('[Guacamole Client] Failed to initialize:', err);
+        setConnectionState('error');
+        setErrorMessage(err.message || 'Failed to initialize Guacamole RDP connection');
+      }
+    };
+
+    // Small delay / rAF to ensure complete DOM mount and accurate dimensions
+    const frameId = requestAnimationFrame(() => {
+      initConnection();
+    });
+
+    return () => {
+      isSubscribed = false;
+      cancelAnimationFrame(frameId);
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
+      if (clientRef.current) {
         try {
-          client.disconnect();
+          clientRef.current.disconnect();
         } catch {}
-      };
-    } catch (err: any) {
-      console.error('[Guacamole Client] Failed to initialize:', err);
-      setConnectionState('error');
-      setErrorMessage(err.message || 'Failed to initialize Guacamole RDP connection');
-    }
-  }, [session.token, device.hostname, device.port]);
+      }
+    };
+  }, [session.token, device.hostname, device.port, device.username, isRtl]);
 
   // Handle Fullscreen Toggle
   const toggleFullscreen = () => {
@@ -214,11 +353,9 @@ export const RemoteDesktopSessionView: React.FC<RemoteDesktopSessionViewProps> =
   const sendCtrlAltDel = () => {
     if (!clientRef.current) return;
     const client = clientRef.current;
-    // Press Ctrl, Alt, Del
     client.sendKeyEvent(1, 0xFFE3); // Control_L
     client.sendKeyEvent(1, 0xFFE9); // Alt_L
     client.sendKeyEvent(1, 0xFFFF); // Delete
-    // Release in reverse
     client.sendKeyEvent(0, 0xFFFF);
     client.sendKeyEvent(0, 0xFFE9);
     client.sendKeyEvent(0, 0xFFE3);
@@ -287,13 +424,13 @@ export const RemoteDesktopSessionView: React.FC<RemoteDesktopSessionViewProps> =
             {connectionState === 'connected' && (
               <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 text-xs font-semibold">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse" />
-                <span>{isRtl ? 'متصل' : 'Connected'}</span>
+                <span>{isRtl ? 'متصل (Connected)' : 'Connected'}</span>
               </span>
             )}
             {connectionState === 'connecting' && (
               <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/40 text-xs font-semibold">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400" />
-                <span>{isRtl ? 'در حال برقراری ارتباط...' : 'Connecting...'}</span>
+                <span>{isRtl ? 'در حال برقراری اتصال...' : 'Connecting to RDP...'}</span>
               </span>
             )}
             {connectionState === 'error' && (
@@ -337,6 +474,25 @@ export const RemoteDesktopSessionView: React.FC<RemoteDesktopSessionViewProps> =
           }}
         />
 
+        {/* Intermediate Connecting Overlay */}
+        {connectionState === 'connecting' && (
+          <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-xs flex flex-col items-center justify-center p-4 z-15 pointer-events-none animate-fadeIn">
+            <div className="flex flex-col items-center gap-3 p-6 rounded-2xl bg-slate-900/90 border border-white/10 shadow-2xl">
+              <div className="p-3 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30">
+                <RefreshCw className="w-6 h-6 animate-spin" />
+              </div>
+              <div className="text-center">
+                <h4 className="text-sm font-bold text-white">
+                  {isRtl ? 'در حال مذاکره با سرویس ویندوز RDP...' : 'Negotiating session with Windows RDP...'}
+                </h4>
+                <p className="text-xs text-slate-400 font-mono mt-1">
+                  {device.hostname}:{device.port} ({device.username})
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Diagnostic Panel for Error or Disconnected State */}
         {(connectionState === 'error' || connectionState === 'disconnected') && (
           <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-6 z-20 animate-fadeIn">
@@ -350,8 +506,8 @@ export const RemoteDesktopSessionView: React.FC<RemoteDesktopSessionViewProps> =
                     ? (isRtl ? 'عدم برقراری ارتباط با ویندوز RDP' : 'Windows RDP Connection Failed')
                     : (isRtl ? 'ارتباط ریموت دسکتاپ پایان یافت' : 'Remote Session Ended')}
                 </h4>
-                <p className="text-xs text-slate-400 mt-1 font-mono">
-                  {errorMessage || (isRtl ? 'سشن با موفقیت خاتمه یافت.' : 'Session closed cleanly.')}
+                <p className="text-xs text-red-300/90 mt-2 font-mono p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-left dir-ltr">
+                  {errorMessage || (isRtl ? 'سشن خاتمه یافت.' : 'Session ended.')}
                 </p>
               </div>
 
@@ -361,9 +517,10 @@ export const RemoteDesktopSessionView: React.FC<RemoteDesktopSessionViewProps> =
                   {isRtl ? 'موارد قابل بررسی:' : 'Diagnostic Checklist:'}
                 </div>
                 <div>• Target: <span className="text-white">{device.hostname}:{device.port}</span></div>
+                <div>• User & Domain: <span className="text-white">{device.username} {device.domain ? `(${device.domain})` : ''}</span></div>
                 <div>• Guacamole Proxy (guacd): <span className="text-white">port 4822</span></div>
-                <div>• Run in Linux/Docker: <span className="text-cyan-300">docker-compose up -d guacd</span></div>
-                <div>• Ensure Windows Remote Desktop & Firewall allow port {device.port}</div>
+                <div>• Verify Windows Remote Desktop is enabled and firewall port {device.port} is open</div>
+                <div>• Check NLA / CredSSP and SSL/TLS certificate permissions on Windows host</div>
               </div>
 
               <div className="flex items-center justify-center gap-3 pt-2">
